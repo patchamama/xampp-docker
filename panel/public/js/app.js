@@ -331,7 +331,13 @@ function openUserAction(siteName, action) {
         <input id="su-username" placeholder="username">
         <input id="su-email" placeholder="email">
         <input id="su-password" placeholder="password">
-        <input id="su-role" placeholder="role (author/editor/admin)">
+        <select id="su-role">
+          <option value="subscriber">subscriber</option>
+          <option value="contributor">contributor</option>
+          <option value="author" selected>author</option>
+          <option value="editor">editor</option>
+          <option value="administrator">administrator</option>
+        </select>
         <button onclick="submitUserAction('${siteName}','add_user')">${t('terminal_run') || 'Ejecutar'}</button>
       </div>`
   }
