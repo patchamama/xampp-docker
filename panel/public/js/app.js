@@ -879,12 +879,18 @@ async function openImageGallery() {
     item.innerHTML = `
       <div class="gallery-item-thumb" onclick="galleryView('${img.path}')">
         <img src="${url}" alt="${img.name}" loading="lazy">
+        <span class="gallery-item-res"></span>
       </div>
       <div class="gallery-item-name" title="${img.path}">${img.name}</div>
       <div class="gallery-item-actions">
         <button onclick="galleryRename('${img.path}')">✏️</button>
         <button class="danger" onclick="galleryDelete('${img.path}')">🗑️</button>
       </div>`
+    const imgEl = item.querySelector('img')
+    const resEl = item.querySelector('.gallery-item-res')
+    imgEl.addEventListener('load', () => {
+      resEl.textContent = `${imgEl.naturalWidth}×${imgEl.naturalHeight}`
+    })
     grid.appendChild(item)
   }
 }

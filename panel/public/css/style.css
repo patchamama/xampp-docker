@@ -711,6 +711,23 @@ textarea {
   border-radius: 7px 7px 0 0;
   background: #111;
   cursor: pointer;
+  position: relative;
+}
+.gallery-item-res {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: rgba(0,0,0,.55);
+  color: #fff;
+  font-size: 10px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 3px;
+  pointer-events: none;
+  display: none;
+}
+.gallery-item-res:not(:empty) {
+  display: block;
 }
 .gallery-item-thumb img {
   width: 100%;
