@@ -42,6 +42,14 @@ check_docker_compose() {
   return 1
 }
 
+compose_cmd() {
+  if [[ "${COMPOSE_CMD:-}" == "docker compose" ]]; then
+    docker compose "$@"
+  else
+    docker-compose "$@"
+  fi
+}
+
 print_install_instructions() {
   local os
   os=$(uname -s)
@@ -121,34 +129,19 @@ check_docker_running() {
 preflight_registry_access() {
   echo -e "${BOLD}Checking Docker Hub access...${NC}"
 
-  # Fast probe that often surfaces credential helper issues early
-  if docker manifest inspect php:8.4-apache >/dev/null 2>&1 \
-    && docker manifest inspect debian:bookworm-slim >/dev/null 2>&1; then
-    echo -e "  ${GREEN}✓${NC} Acceso al registry OK"
+  # Use docker pull (not manifest inspect) — manifest inspect uses BuildKit's
+  # credential helper which fails intermittently on Docker Desktop macOS.
+  if docker pull php:8.4-apache >/dev/null 2>&1; then
+    echo -e "  ${GREEN}✓${NC} Registry access OK"
     echo ""
     return 0
   fi
 
-  echo -e "  ${YELLOW}⚠ Possible Docker credential issue.${NC}"
-  echo -e "  Trying anonymous mode..."
-  local tmp_docker_cfg
-  tmp_docker_cfg="$(mktemp -d)"
-  printf '{ "auths": {} }\n' > "${tmp_docker_cfg}/config.json"
-
-  if DOCKER_CONFIG="$tmp_docker_cfg" docker manifest inspect php:8.4-apache >/dev/null 2>&1 \
-    && DOCKER_CONFIG="$tmp_docker_cfg" docker manifest inspect debian:bookworm-slim >/dev/null 2>&1; then
-    echo -e "  ${GREEN}✓${NC} Anonymous mode OK. The script will retry build anonymously if needed."
-    rm -rf "$tmp_docker_cfg"
-    echo ""
-    return 0
-  fi
-
-  rm -rf "$tmp_docker_cfg"
   echo ""
-  echo -e "${RED}✗ No usable access to Docker Hub (neither authenticated nor anonymous).${NC}"
+  echo -e "${RED}✗ No usable access to Docker Hub.${NC}"
   echo "  Suggestions:"
   echo "   1) Open Docker Desktop and sign in again"
-  echo "   2) Ejecuta: docker logout && docker login"
+  echo "   2) Run: docker logout && docker login"
   echo "   3) Check your network/corporate proxy/VPN"
   echo ""
   return 1
@@ -277,7 +270,7 @@ start_stack() {
   echo -e "${BOLD}Starting services...${NC}"
   echo ""
 
-  $COMPOSE_CMD up -d --remove-orphans
+  compose_cmd up -d --remove-orphans
 
   echo ""
 }
@@ -385,10 +378,12 @@ ensure_sudo() {
 
 copy_xampp_data() {
   local script_dir="$1"
-  local dest="$REAL_HOME/xampp-data"
+  local current_user="$USER"
+  local dest="$HOME/xampp-data"
   local xampp_htdocs="/Applications/XAMPP/xamppfiles/htdocs"
   local xampp_mysql="/Applications/XAMPP/xamppfiles/var/mysql"
   local docker_config="$script_dir/config"
+  local needs_sudo=0
   local needs_copy=0
 
   # Check if any source data exists and hasn't been copied yet
@@ -398,6 +393,10 @@ copy_xampp_data() {
 
   [[ $needs_copy -eq 0 ]] && return 0
 
+  # Check if XAMPP dirs need sudo to read
+  if [[ -d "$xampp_htdocs" ]] && ! test -r "$xampp_htdocs"; then needs_sudo=1; fi
+  if [[ -d "$xampp_mysql"  ]] && ! test -r "$xampp_mysql";  then needs_sudo=1; fi
+
   echo -e "${BOLD}Copying XAMPP data to ${dest}...${NC}"
   echo ""
 
@@ -405,19 +404,27 @@ copy_xampp_data() {
     "$dest/config/php" "$dest/config/apache" \
     "$dest/config/mysql" "$dest/config/proftpd"
 
+  local CP="cp"
+  local CHOWN_CMD=""
+  if [[ $needs_sudo -eq 1 ]]; then
+    echo -e "  ${YELLOW}⚠ XAMPP data requires sudo to read.${NC}"
+    CP="sudo cp"
+    CHOWN_CMD="sudo chown -R ${current_user} ${dest}"
+  fi
+
   if [[ -d "$xampp_htdocs" && ! -d "$dest/htdocs/$(ls "$xampp_htdocs" 2>/dev/null | head -1)" ]]; then
     echo -n "  Copying htdocs... "
-    cp -rp "$xampp_htdocs/." "$dest/htdocs/"
+    $CP -rp "$xampp_htdocs/." "$dest/htdocs/"
     echo -e "${GREEN}done${NC}"
   fi
 
   if [[ -d "$xampp_mysql" ]]; then
     echo -n "  Copying MySQL data... "
-    cp -rp "$xampp_mysql/." "$dest/mysql/"
+    $CP -rp "$xampp_mysql/." "$dest/mysql/"
     echo -e "${GREEN}done${NC}"
   fi
 
-  # Always sync config files from Docker/config so edits in panel persist
+  # Sync config files (always readable — no sudo needed)
   echo -n "  Syncing configuration files... "
   [[ -f "$docker_config/php/php.ini"           ]] && cp "$docker_config/php/php.ini"           "$dest/config/php/"
   [[ -f "$docker_config/apache/httpd.conf"      ]] && cp "$docker_config/apache/httpd.conf"      "$dest/config/apache/"
@@ -425,12 +432,12 @@ copy_xampp_data() {
   [[ -f "$docker_config/proftpd/proftpd.conf"   ]] && cp "$docker_config/proftpd/proftpd.conf"   "$dest/config/proftpd/"
   echo -e "${GREEN}done${NC}"
 
-  chown -R "$REAL_USER" "$dest"
+  [[ -n "$CHOWN_CMD" ]] && $CHOWN_CMD
   echo ""
-  echo -e "  ${GREEN}✓ Datos disponibles en ${dest}${NC}"
+  echo -e "  ${GREEN}✓ Data available at ${dest}${NC}"
   echo ""
 
-  # Update .env with absolute paths (only if values differ)
+  # Update .env with absolute paths
   local env_file="$script_dir/.env"
   if [[ -f "$env_file" ]]; then
     sed -i.bak \
@@ -438,7 +445,6 @@ copy_xampp_data() {
       -e "s|^MYSQL_DATA_PATH=.*|MYSQL_DATA_PATH=$dest/mysql|" \
       -e "s|^CONFIG_PATH=.*|CONFIG_PATH=$dest/config|" \
       "$env_file"
-    # Add CONFIG_PATH if not present
     grep -q '^CONFIG_PATH=' "$env_file" || echo "CONFIG_PATH=$dest/config" >> "$env_file"
   fi
 }
@@ -446,11 +452,10 @@ copy_xampp_data() {
 rebuild_from_scratch() {
   local script_dir="$1"
 
-  echo -e "${RED}⚠  RECONSTRUCCIÓN COMPLETA${NC}"
+  echo -e "${RED}⚠  FULL REBUILD${NC}"
   echo ""
   echo "  This will:"
-  echo "    • Detener y eliminar todos los contenedores del stack"
-  echo "    • Remove all stack containers"
+  echo "    • Stop and remove all stack containers"
   echo "    • Remove locally built images (not third-party images)"
   echo "    • Remove stack Docker volumes"
   echo "    • Rebuild all images from scratch (--no-cache)"
@@ -476,15 +481,15 @@ rebuild_from_scratch() {
     set +a
   fi
 
-  echo -e "${BOLD}[1/4] Deteniendo y eliminando contenedores...${NC}"
-  $COMPOSE_CMD down --volumes --remove-orphans 2>/dev/null || true
+  echo -e "${BOLD}[1/4] Stopping and removing containers...${NC}"
+  compose_cmd down --volumes --remove-orphans 2>/dev/null || true
   echo -e "      ${GREEN}✓${NC}"
   echo ""
 
   echo -e "${BOLD}[2/4] Removing locally built images...${NC}"
   # Only remove images built by this compose project (not pulled images like mariadb, phpmyadmin)
   local images
-  images=$($COMPOSE_CMD images -q 2>/dev/null || true)
+  images=$(compose_cmd images -q 2>/dev/null || true)
   if [[ -n "$images" ]]; then
     docker rmi $images 2>/dev/null || true
   fi
@@ -499,23 +504,44 @@ rebuild_from_scratch() {
   echo ""
 
   echo -e "${BOLD}[4/4] Rebuilding images from scratch...${NC}"
-  if ! $COMPOSE_CMD build --no-cache --pull; then
-    echo ""
-    echo -e "${YELLOW}⚠ Build failed with Docker credentials. Retrying in anonymous mode...${NC}"
-    local tmp_docker_cfg
-    tmp_docker_cfg="$(mktemp -d)"
-    printf '{ "auths": {} }\n' > "${tmp_docker_cfg}/config.json"
-    if ! DOCKER_CONFIG="$tmp_docker_cfg" $COMPOSE_CMD build --no-cache --pull; then
-      rm -rf "$tmp_docker_cfg"
-      echo ""
-      echo -e "${RED}✗ Could not rebuild images.${NC}"
-      echo "  Suggestions:"
-      echo "   1) Open Docker Desktop and sign in again to Docker Hub"
-      echo "   2) Ejecuta: docker logout && docker login"
-      echo "   3) Reintenta ./start-docker.sh"
-      exit 1
+
+  # Fix buildx/current ownership if a previous root run corrupted it
+  local buildx_current="$HOME/.docker/buildx/current"
+  if [[ -f "$buildx_current" ]] && ! test -r "$buildx_current"; then
+    echo -e "  ${YELLOW}⚠ Fixing buildx permissions (requires sudo)...${NC}"
+    sudo chown "$USER" "$buildx_current"
+  fi
+
+  # Pull base images explicitly first so BuildKit credential helper issues
+  # don't abort the entire build. BuildKit's metadata fetch with --pull can
+  # fail even when `docker pull` works fine (known Docker Desktop bug).
+  # Derive the list dynamically from Dockerfiles so it stays in sync.
+  local base_images=()
+  while IFS= read -r line; do
+    img="${line#FROM }"
+    # Expand $PHP_BASE_IMAGE from env if present
+    if [[ "$img" == *'${'* || "$img" == *'$'* ]]; then
+      img=$(eval echo "$img" 2>/dev/null || true)
     fi
-    rm -rf "$tmp_docker_cfg"
+    [[ -n "$img" && "$img" != *" "* ]] && base_images+=("$img")
+  done < <(grep -h '^FROM' "$script_dir"/Dockerfile* "$script_dir"/panel/Dockerfile 2>/dev/null | awk '{print $2}' | sort -u | grep -v '^$')
+
+  for img in "${base_images[@]}"; do
+    echo -e "  Pulling ${img}..."
+    if ! docker pull "$img"; then
+      echo -e "  ${YELLOW}⚠ Could not pull ${img} — will use cached layer if available${NC}"
+    fi
+  done
+
+  # Build without --pull: base images are already in daemon cache from pulls above
+  if ! compose_cmd build --no-cache; then
+    echo ""
+    echo -e "${RED}✗ Could not rebuild images.${NC}"
+    echo "  Suggestions:"
+    echo "   1) Open Docker Desktop and sign in again to Docker Hub"
+    echo "   2) Run: docker logout && docker login"
+    echo "   3) Retry ./start-docker.sh"
+    exit 1
   fi
   echo ""
   echo -e "      ${GREEN}✓ Rebuild completed.${NC}"
@@ -557,7 +583,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 case "$menu_choice" in
   3)
     preflight_registry_access || exit 1
-    ensure_sudo "$@"
     rebuild_from_scratch "$SCRIPT_DIR"
     stop_xampp_if_running
     check_docker_file_sharing
@@ -566,7 +591,6 @@ case "$menu_choice" in
     print_access_info
     ;;
   2)
-    ensure_sudo "$@"
     stop_xampp_if_running
     copy_xampp_data "$SCRIPT_DIR"
     check_docker_file_sharing
