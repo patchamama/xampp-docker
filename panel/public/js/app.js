@@ -481,6 +481,10 @@ async function installCMS(btn = null) {
   if (!body.dir || !body.title || !body.adminUser || !body.adminPass || !body.adminEmail) {
     return alert('Please fill all fields.')
   }
+  const cms = body.cms?.toLowerCase()
+  if ((cms === 'joomla' || cms === 'drupal') && body.adminPass.length < 12) {
+    return alert(`${body.cms} requires a password of at least 12 characters.`)
+  }
 
   const log = document.getElementById('install-log')
   const installBtn = btn || document.getElementById('install-btn')
