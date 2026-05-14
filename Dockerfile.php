@@ -1,4 +1,5 @@
-FROM php:8.2-apache
+ARG PHP_BASE_IMAGE=php:8.4-apache
+FROM ${PHP_BASE_IMAGE}
 
 # System dependencies
 RUN apt-get update && apt-get install -y \

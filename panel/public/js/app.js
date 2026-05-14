@@ -62,6 +62,7 @@ document.querySelectorAll('.nav-link').forEach(link => {
     if (section === 'services')  loadServices()
     if (section === 'sites')     loadSites()
     if (section === 'phpinfo')   loadPhpInfo()
+    if (section === 'config')    loadPhpRuntimeOptions()
     if (section === 'languages') {
       if (!cmEditor) initCodeMirror()
       switchLang(currentLang)
@@ -91,12 +92,21 @@ async function loadServices() {
   }
 }
 
-async function serviceAction(service, action) {
+function setButtonLoading(btn, on = true) {
+  if (!btn) return
+  btn.classList.toggle('is-loading', !!on)
+  btn.disabled = !!on
+}
+
+async function serviceAction(service, action, btn = null) {
+  setButtonLoading(btn, true)
   try {
     await fetch(`/api/services/${service}/${action}`, { method: 'POST' })
     setTimeout(loadServices, 1200)
   } catch (err) {
     console.error(err)
+  } finally {
+    setTimeout(() => setButtonLoading(btn, false), 350)
   }
 }
 
@@ -107,6 +117,17 @@ const CMS_SVG = {
   MediaWiki: `<svg width="22" height="22" viewBox="0 0 24 24" fill="#3366cc"><path d="M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2zm1 14.5h-2v-7h2v7zm0-9h-2V5.5h2V7.5z"/></svg>`,
   Drupal:    `<svg width="22" height="22" viewBox="0 0 24 24" fill="#0678be"><path d="M12 2C9.5 2 7 3.5 7 3.5S9 4 9 6c0 1.5-1.5 2.5-1.5 2.5S6 7.5 6 5.5C4.5 6.5 3 8.5 3 11a9 9 0 0 0 18 0c0-4.5-4-9-9-9zm0 14a4 4 0 1 1 0-8 4 4 0 0 1 0 8z"/></svg>`,
   PHP:       `<svg width="22" height="22" viewBox="0 0 24 24" fill="#8892bf"><path d="M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2zm-2 6h4c1.1 0 2 .9 2 2v1c0 1.1-.9 2-2 2h-2v3h-2V8zm2 2v2h2v-2h-2z"/></svg>`,
+}
+
+function actionIcon(kind) {
+  const icons = {
+    info: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 10 10A10.01 10.01 0 0 0 12 2Zm0 4.75a1.25 1.25 0 1 1-1.25 1.25A1.25 1.25 0 0 1 12 6.75Zm1.5 10.5h-3a.75.75 0 0 1 0-1.5h.75v-4h-.75a.75.75 0 0 1 0-1.5H12a.75.75 0 0 1 .75.75v4.75h.75a.75.75 0 0 1 0 1.5Z"/></svg>`,
+    files: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5.75A2.75 2.75 0 0 1 5.75 3h4.19a2 2 0 0 1 1.41.59l1.06 1.06a.5.5 0 0 0 .35.15h5.49A2.75 2.75 0 0 1 21 7.55v10.7A2.75 2.75 0 0 1 18.25 21H5.75A2.75 2.75 0 0 1 3 18.25V5.75Z"/></svg>`,
+    admin: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 3 7v6c0 5.05 3.4 9.78 9 11 5.6-1.22 9-5.95 9-11V7l-9-5Zm0 6a3 3 0 1 1 0 6 3 3 0 0 1 0-6Zm0 11c-2.2 0-4.15-.9-5.5-2.35.03-1.83 3.67-2.84 5.5-2.84 1.82 0 5.47 1 5.5 2.84C16.14 18.1 14.2 19 12 19Z"/></svg>`,
+    db: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3C7.03 3 3 4.79 3 7v10c0 2.21 4.03 4 9 4s9-1.79 9-4V7c0-2.21-4.03-4-9-4Zm0 2c4.42 0 7 .99 7 2s-2.58 2-7 2-7-.99-7-2 2.58-2 7-2Zm0 14c-4.42 0-7-.99-7-2v-2.2c1.63 1.01 4.33 1.7 7 1.7s5.37-.69 7-1.7V17c0 1.01-2.58 2-7 2Zm0-5c-4.42 0-7-.99-7-2v-2.2c1.63 1.01 4.33 1.7 7 1.7s5.37-.69 7-1.7V12c0 1.01-2.58 2-7 2Z"/></svg>`,
+    delete: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6a1 1 0 0 1 1 1v1h4a1 1 0 1 1 0 2h-1l-1 13a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 7H4a1 1 0 1 1 0-2h4V4a1 1 0 0 1 1-1Zm1 2v0h4V5h-4Zm-1 5a1 1 0 0 1 1 1v7a1 1 0 1 1-2 0v-7a1 1 0 0 1 1-1Zm6 0a1 1 0 0 1 1 1v7a1 1 0 1 1-2 0v-7a1 1 0 0 1 1-1Z"/></svg>`
+  }
+  return icons[kind] || ''
 }
 
 async function loadSites() {
@@ -129,35 +150,160 @@ async function loadSites() {
       const card = document.createElement('div')
       card.className = 'site-card'
 
-      // Favicon / CMS icon
-      let iconHtml
-      if (s.favicon) {
-        iconHtml = `<img class="site-favicon" src="${s.favicon}"
-          onerror="this.style.display='none';this.nextElementSibling.style.display='block'"
-          alt="${s.cms}">
-          <span class="site-favicon-fallback" style="display:none">${CMS_SVG[s.cms] || s.icon}</span>`
-      } else {
-        // Try loading favicon.ico from the live site
-        iconHtml = `<img class="site-favicon"
-          src="http://localhost/${s.name}/favicon.ico"
-          onerror="this.style.display='none';this.nextElementSibling.style.display='block'"
-          alt="${s.cms}">
-          <span class="site-favicon-fallback" style="display:none">${CMS_SVG[s.cms] || s.icon}</span>`
-      }
+      // Always prefer CMS icon in Sites list (as requested)
+      const iconHtml = `<span class="site-favicon-fallback">${CMS_SVG[s.cms] || s.icon}</span>`
 
       card.innerHTML = `
         ${iconHtml}
         <div class="site-info">
           <a class="site-name" href="${s.url}" target="_blank">${s.name}</a>
           <div class="site-cms">${s.cms}</div>
+          <div class="site-actions site-actions-inline">
+            <button class="site-icon-btn" title="${t('sites_info') || 'Info'}" aria-label="${t('sites_info') || 'Info'}" onclick="showSiteInfo('${s.name}', this)">${actionIcon('info')}</button>
+            <button class="site-icon-btn" title="${t('browser_title') || 'Archivos'}" aria-label="${t('browser_title') || 'Archivos'}" onclick="browseDir('/${s.name}')">${actionIcon('files')}</button>
+            <button class="site-icon-btn" title="${t('sites_admin') || 'Admin'}" aria-label="${t('sites_admin') || 'Admin'}" onclick="window.open('${s.adminUrl}','_blank')">${actionIcon('admin')}</button>
+            <button class="site-icon-btn" title="${t('sites_db') || 'Database'}" aria-label="${t('sites_db') || 'Database'}" onclick="window.open('${s.phpmyadminUrl}','_blank')">${actionIcon('db')}</button>
+            <button class="site-icon-btn danger" title="${t('sites_delete') || 'Eliminar'}" aria-label="${t('sites_delete') || 'Eliminar'}" onclick="deleteSite('${s.name}', this)">${actionIcon('delete')}</button>
+          </div>
         </div>
-        <div class="site-actions">
-          <button class="site-browse-btn" onclick="browseDir('/${s.name}')">📁 ${t('browser_title') || 'Archivos'}</button>
-        </div>`
+      `
       grid.appendChild(card)
     }
   } catch (err) {
     list.innerHTML = `<p style="color:var(--red)">${err.message}</p>`
+  }
+}
+
+async function deleteSite(siteName, btn = null) {
+  const dropDb = confirm(`${t('sites_confirm_delete') || '¿Eliminar este sitio?'}\n\n${siteName}\n\n${t('sites_confirm_dropdb') || '¿También eliminar la base de datos? (Aceptar = sí, Cancelar = no)'}`)
+  const proceed = confirm(`${t('sites_confirm_delete_final') || 'Confirmación final: ¿Seguro que quieres eliminar el sitio?'}\n\n${siteName}`)
+  if (!proceed) return
+  setButtonLoading(btn, true)
+  try {
+    const res = await fetch(`/api/sites/${encodeURIComponent(siteName)}?dropDb=${dropDb ? '1' : '0'}`, { method: 'DELETE' })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Delete failed')
+    alert(`${t('sites_deleted') || 'Sitio eliminado'}: ${siteName}`)
+    loadSites()
+  } catch (err) {
+    alert(err.message)
+  } finally {
+    setButtonLoading(btn, false)
+  }
+}
+
+function formatSiteInfoText(info) {
+  return [
+    `CMS: ${info.cms || ''}`,
+    `Sitio: ${info.site || ''}`,
+    '',
+    `Frontend URL: ${info.urls?.frontend || ''}`,
+    `Admin URL: ${info.urls?.admin || ''}`,
+    `phpMyAdmin URL: ${info.urls?.phpmyadmin || ''}`,
+    '',
+    `DB Host: ${info.db?.host || ''}`,
+    `DB Name: ${info.db?.name || ''}`,
+    `DB User: ${info.db?.user || ''}`,
+    `DB Password: ${info.db?.password ?? ''}`,
+    '',
+    `Admin User: ${info.admin?.username || ''}`,
+    `Admin Password: ${info.admin?.password ?? ''}`,
+    `Admin Email: ${info.admin?.email || ''}`,
+    '',
+    `Theme: ${info.currentTheme || ''}`,
+    `Active Plugins: ${(info.activePlugins || []).join(', ')}`
+  ].join('\n')
+}
+
+async function showSiteInfo(siteName, btn = null) {
+  setButtonLoading(btn, true)
+  try {
+    const res = await fetch(`/api/sites/${encodeURIComponent(siteName)}/info`)
+    const info = await res.json()
+    if (!res.ok) throw new Error(info.error || 'Error')
+    const text = formatSiteInfoText(info)
+    window.currentSiteInfo = info
+    openSiteInfoModal(siteName, text, info)
+  } catch (err) {
+    alert(err.message)
+  } finally {
+    setButtonLoading(btn, false)
+  }
+}
+
+function openSiteInfoModal(siteName, text, info) {
+  const old = document.getElementById('site-info-modal')
+  if (old) old.remove()
+
+  const modal = document.createElement('div')
+  modal.id = 'site-info-modal'
+  modal.innerHTML = `
+    <div class="site-info-box">
+      <div class="site-info-header">
+        <strong>${siteName}</strong>
+        <button onclick="document.getElementById('site-info-modal').remove()">✕</button>
+      </div>
+      <textarea id="site-info-text" readonly>${text}</textarea>
+      <div class="site-info-actions">
+        <button onclick="copySiteInfo()">${t('copy') || 'Copiar'}</button>
+        <button onclick="openUserAction('${siteName}','change_password')">${t('site_change_pass') || 'Cambiar contraseña'}</button>
+        <button onclick="openUserAction('${siteName}','add_user')">${t('site_add_user') || 'Agregar usuario'}</button>
+      </div>
+      <div id="site-user-action"></div>
+    </div>`
+  document.body.appendChild(modal)
+}
+
+function copySiteInfo() {
+  const ta = document.getElementById('site-info-text')
+  ta.select()
+  document.execCommand('copy')
+}
+
+function openUserAction(siteName, action) {
+  const box = document.getElementById('site-user-action')
+  if (action === 'change_password') {
+    const users = Array.isArray(window.currentSiteInfo?.users) ? window.currentSiteInfo.users : []
+    const usersOptions = users.map(u => `<option value="${u}">${u}</option>`).join('')
+    box.innerHTML = `
+      <div class="site-user-form">
+        <select id="su-username">${usersOptions || '<option value="">(sin usuarios)</option>'}</select>
+        <input id="su-password" placeholder="new password">
+        <button onclick="submitUserAction('${siteName}','change_password')">${t('terminal_run') || 'Ejecutar'}</button>
+      </div>`
+  } else {
+    box.innerHTML = `
+      <div class="site-user-form">
+        <input id="su-username" placeholder="username">
+        <input id="su-email" placeholder="email">
+        <input id="su-password" placeholder="password">
+        <input id="su-role" placeholder="role (author/editor/admin)">
+        <button onclick="submitUserAction('${siteName}','add_user')">${t('terminal_run') || 'Ejecutar'}</button>
+      </div>`
+  }
+}
+
+async function submitUserAction(siteName, action) {
+  const payload = { action, username: document.getElementById('su-username')?.value?.trim() }
+  if (action === 'change_password') {
+    payload.password = document.getElementById('su-password')?.value || ''
+  } else {
+    payload.email = document.getElementById('su-email')?.value?.trim() || ''
+    payload.password = document.getElementById('su-password')?.value || ''
+    payload.role = document.getElementById('su-role')?.value?.trim() || ''
+  }
+  try {
+    const res = await fetch(`/api/sites/${encodeURIComponent(siteName)}/users`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Error')
+    alert(data.message || 'OK')
+    showSiteInfo(siteName)
+  } catch (err) {
+    alert(err.message)
   }
 }
 
@@ -211,10 +357,59 @@ async function saveConfig() {
   setTimeout(() => { flash.className = 'flash' }, 4000)
 }
 
+async function loadPhpRuntimeOptions() {
+  const sel = document.getElementById('php-runtime-select')
+  const cur = document.getElementById('php-runtime-current')
+  if (!sel) return
+  try {
+    const res = await fetch('/api/config/php-runtime/options')
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Error')
+    sel.innerHTML = ''
+    for (const op of (data.options || [])) {
+      const o = document.createElement('option')
+      o.value = op.key
+      o.textContent = op.label
+      if (op.key === data.current) o.selected = true
+      sel.appendChild(o)
+    }
+    if (cur) {
+      cur.textContent = data.runtime_php_version
+        ? `${t('config_php_runtime_current') || 'Versión PHP actual'}: ${data.runtime_php_version}`
+        : (t('config_php_runtime_current_unknown') || 'No se pudo detectar la versión PHP en runtime')
+    }
+  } catch (err) {
+    console.error(err)
+  }
+}
+
+async function savePhpRuntime() {
+  const sel = document.getElementById('php-runtime-select')
+  const flash = document.getElementById('php-runtime-flash')
+  if (!sel || !flash) return
+  flash.className = 'flash'
+  try {
+    const res = await fetch('/api/config/php-runtime/options', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ php_base_image: sel.value }),
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Error')
+    flash.textContent = `${data.message} ${data.apply_commands?.join(' ; ')}`
+    flash.className = 'flash ok'
+  } catch (err) {
+    flash.textContent = err.message
+    flash.className = 'flash err'
+  }
+}
+
 // CMS Installer
-async function installCMS() {
+async function installCMS(btn = null) {
   const body = {
     cms: document.getElementById('i-cms').value,
+    version: document.getElementById('i-version')?.value || '',
+    customUrl: document.getElementById('i-custom-url')?.value?.trim() || '',
     dir: document.getElementById('i-dir').value.trim(),
     title: document.getElementById('i-title').value.trim(),
     adminUser: document.getElementById('i-user').value.trim(),
@@ -228,10 +423,10 @@ async function installCMS() {
   }
 
   const log = document.getElementById('install-log')
-  const btn = document.getElementById('install-btn')
+  const installBtn = btn || document.getElementById('install-btn')
   log.innerHTML = ''
   log.classList.add('visible')
-  btn.disabled = true
+  setButtonLoading(installBtn, true)
 
   const addLine = (cls, msg) => {
     const el = document.createElement('div')
@@ -281,6 +476,22 @@ async function installCMS() {
             link.textContent = t('install_visit')
             link.style.color = 'var(--accent2)'
             log.appendChild(link)
+            if (ev.adminUrl) {
+              const sep = document.createTextNode(' · ')
+              const adminLink = document.createElement('a')
+              adminLink.href = ev.adminUrl
+              adminLink.target = '_blank'
+              adminLink.textContent = t('install_visit_admin')
+              adminLink.style.color = 'var(--accent)'
+              log.appendChild(sep)
+              log.appendChild(adminLink)
+            }
+          } else if (ev.step === 'summary' && ev.summary) {
+            const summaryBlock = document.createElement('textarea')
+            summaryBlock.className = 'install-summary'
+            summaryBlock.readOnly = true
+            summaryBlock.value = formatSiteInfoText(ev.summary)
+            log.appendChild(summaryBlock)
           } else {
             addLine('step', `[${ev.step}] ${ev.message}`)
           }
@@ -296,44 +507,118 @@ async function installCMS() {
       if (body.overwrite) {
         addLine('step', '[prepare] Sobrescribiendo directorio existente...')
         await runInstallStream(body)
-        return
-      }
-      const ok = confirm(`El directorio "${body.dir}" ya existe. ¿Deseas sobreescribirlo?`)
-      if (ok) {
-        addLine('step', '[prepare] Sobrescribiendo directorio existente...')
-        body.overwrite = true
-        await runInstallStream(body)
       } else {
-        addLine('err', `✗ Directory ${body.dir} already exists in htdocs`)
+        const ok = confirm(`El directorio "${body.dir}" ya existe. ¿Deseas sobreescribirlo?`)
+        if (ok) {
+          addLine('step', '[prepare] Sobrescribiendo directorio existente...')
+          body.overwrite = true
+          await runInstallStream(body)
+        } else {
+          addLine('err', `✗ Directory ${body.dir} already exists in htdocs`)
+        }
       }
     }
   } catch (err) {
     addLine('err', `✗ ${err.message}`)
+  } finally {
+    setButtonLoading(installBtn, false)
   }
-
-  btn.disabled = false
 }
 
-async function runTerminalCommand() {
-  const command = document.getElementById('term-cmd').value.trim()
+async function loadInstallVersions() {
+  const cms = document.getElementById('i-cms')?.value
+  const sel = document.getElementById('i-version')
+  if (!cms || !sel) return
+  sel.innerHTML = `<option value="">${t('install_version_latest') || 'Latest compatible'}</option>`
+  try {
+    const res = await fetch(`/api/install/versions?cms=${encodeURIComponent(cms)}`)
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Error loading versions')
+    for (const v of (data.versions || [])) {
+      const op = document.createElement('option')
+      op.value = v.version
+      const tag = (v.channel || '').toLowerCase()
+      const label = tag === 'lts'
+        ? 'LTS'
+        : (tag === 'stable' ? 'Stable' : (tag === 'legacy' ? 'Legacy' : ''))
+      op.textContent = label ? `${v.version} (${label})` : v.version
+      sel.appendChild(op)
+    }
+  } catch (err) {
+    console.error(err)
+  }
+}
+
+let terminalSessionId = null
+let terminalSource = null
+
+async function startTerminalSession(btn = null) {
   const cwd = document.getElementById('term-cwd').value.trim() || '/'
   const out = document.getElementById('terminal-output')
-  if (!command) return
-  out.textContent += `\n$ (${cwd}) ${command}\n`
+  if (terminalSessionId) await stopTerminalSession()
+  setButtonLoading(btn, true)
   try {
-    const res = await fetch('/api/terminal/exec', {
+    const res = await fetch('/api/terminal/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ command, cwd }),
+      body: JSON.stringify({ cwd }),
     })
     const data = await res.json()
-    if (data.stdout) out.textContent += data.stdout
-    if (data.stderr) out.textContent += data.stderr
-    out.textContent += `\n[exit ${data.code}]\n`
+    if (!res.ok) throw new Error(data.error || 'Terminal start failed')
+    terminalSessionId = data.session_id
+    out.textContent += `\n[terminal connected at ${cwd}]\n`
+    terminalSource = new EventSource(`/api/terminal/stream/${terminalSessionId}`)
+    terminalSource.onmessage = (e) => {
+      try {
+        const payload = JSON.parse(e.data)
+        if (payload.output) out.textContent += payload.output
+      } catch {}
+      out.scrollTop = out.scrollHeight
+    }
+  } catch (err) {
+    out.textContent += `Error: ${err.message}\n`
+  } finally {
+    setButtonLoading(btn, false)
+  }
+}
+
+async function sendTerminalLine() {
+  if (!terminalSessionId) return alert('Conecta la terminal primero.')
+  const input = document.getElementById('term-cmd')
+  const out = document.getElementById('terminal-output')
+  const line = input.value
+  if (!line.trim()) return
+  out.textContent += `$ ${line}\n`
+  input.value = ''
+  try {
+    await fetch(`/api/terminal/input/${terminalSessionId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data: line + '\n' }),
+    })
   } catch (err) {
     out.textContent += `Error: ${err.message}\n`
   }
-  out.scrollTop = out.scrollHeight
+}
+
+async function sendTerminalCtrlC() {
+  if (!terminalSessionId) return
+  await fetch(`/api/terminal/input/${terminalSessionId}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ data: '\u0003' }),
+  })
+}
+
+async function stopTerminalSession() {
+  if (terminalSource) {
+    terminalSource.close()
+    terminalSource = null
+  }
+  if (!terminalSessionId) return
+  const id = terminalSessionId
+  terminalSessionId = null
+  await fetch(`/api/terminal/stop/${id}`, { method: 'POST' }).catch(() => {})
 }
 
 function clearTerminalOutput() {
@@ -389,6 +674,7 @@ function toggleSidebar() {
 loadLang(lang)
 loadServices()
 setInterval(loadServices, 5000)
+loadInstallVersions()
 // CodeMirror init deferred — only when section is first visited
 
 // ── Languages ──────────────────────────────────────────────────────────────
@@ -446,7 +732,8 @@ if (extension_loaded('gd')) {
 
   php2: `<?php
 // Muestra la tabla completa de phpinfo()
-phpinfo();`,
+phpinfo();
+?>`,
 
   python: `#!/usr/bin/env python3
 # Python — Test de entorno

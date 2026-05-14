@@ -86,9 +86,9 @@
         </div>
         <div class="status-label" id="label-apache">—</div>
         <div class="btn-group">
-          <button onclick="serviceAction('apache','start')" data-i18n="btn_start">Iniciar</button>
-          <button onclick="serviceAction('apache','stop')" class="danger" data-i18n="btn_stop">Detener</button>
-          <button onclick="serviceAction('apache','restart')" data-i18n="btn_restart">Reiniciar</button>
+          <button onclick="serviceAction('apache','start', this)" data-i18n="btn_start">Iniciar</button>
+          <button onclick="serviceAction('apache','stop', this)" class="danger" data-i18n="btn_stop">Detener</button>
+          <button onclick="serviceAction('apache','restart', this)" data-i18n="btn_restart">Reiniciar</button>
         </div>
       </div>
       <div class="card" id="card-mysql">
@@ -98,9 +98,9 @@
         </div>
         <div class="status-label" id="label-mysql">—</div>
         <div class="btn-group">
-          <button onclick="serviceAction('mysql','start')" data-i18n="btn_start">Iniciar</button>
-          <button onclick="serviceAction('mysql','stop')" class="danger" data-i18n="btn_stop">Detener</button>
-          <button onclick="serviceAction('mysql','restart')" data-i18n="btn_restart">Reiniciar</button>
+          <button onclick="serviceAction('mysql','start', this)" data-i18n="btn_start">Iniciar</button>
+          <button onclick="serviceAction('mysql','stop', this)" class="danger" data-i18n="btn_stop">Detener</button>
+          <button onclick="serviceAction('mysql','restart', this)" data-i18n="btn_restart">Reiniciar</button>
         </div>
       </div>
       <div class="card" id="card-proftpd">
@@ -110,9 +110,9 @@
         </div>
         <div class="status-label" id="label-proftpd">—</div>
         <div class="btn-group">
-          <button onclick="serviceAction('proftpd','start')" data-i18n="btn_start">Iniciar</button>
-          <button onclick="serviceAction('proftpd','stop')" class="danger" data-i18n="btn_stop">Detener</button>
-          <button onclick="serviceAction('proftpd','restart')" data-i18n="btn_restart">Reiniciar</button>
+          <button onclick="serviceAction('proftpd','start', this)" data-i18n="btn_start">Iniciar</button>
+          <button onclick="serviceAction('proftpd','stop', this)" class="danger" data-i18n="btn_stop">Detener</button>
+          <button onclick="serviceAction('proftpd','restart', this)" data-i18n="btn_restart">Reiniciar</button>
         </div>
       </div>
     </div>
@@ -140,6 +140,13 @@
   <section id="section-config" class="section">
     <h2 data-i18n="config_title">Configuración</h2>
     <div class="config-bar">
+      <label for="php-runtime-select" data-i18n="config_php_runtime">Versión PHP</label>
+      <select id="php-runtime-select"></select>
+      <button class="primary" onclick="savePhpRuntime()" data-i18n="config_php_apply">Aplicar versión PHP</button>
+    </div>
+    <div id="php-runtime-current" style="margin-bottom:10px;color:var(--muted);font-size:12px"></div>
+    <div class="flash" id="php-runtime-flash"></div>
+    <div class="config-bar">
       <select id="config-select" onchange="loadConfig(this.value)">
         <option value="" data-i18n="config_select">Seleccionar archivo</option>
         <option value="php.ini">php.ini</option>
@@ -158,12 +165,21 @@
     <div class="form-grid">
       <div class="form-group">
         <label data-i18n="install_cms">CMS</label>
-        <select id="i-cms">
+        <select id="i-cms" onchange="loadInstallVersions()">
           <option value="wordpress">WordPress</option>
           <option value="joomla">Joomla</option>
           <option value="mediawiki">MediaWiki</option>
-          <option value="drupal">Drupal</option>
         </select>
+      </div>
+      <div class="form-group">
+        <label data-i18n="install_version">Versión</label>
+        <select id="i-version">
+          <option value="" data-i18n="install_version_latest">Última compatible</option>
+        </select>
+      </div>
+      <div class="form-group full">
+        <label data-i18n="install_custom_url">URL de descarga (opcional)</label>
+        <input type="url" id="i-custom-url" placeholder="https://example.com/cms-release.tar.gz o .zip">
       </div>
       <div class="form-group">
         <label data-i18n="install_dir">Directorio</label>
@@ -192,7 +208,7 @@
         </label>
       </div>
       <div class="form-group full">
-        <button class="primary" onclick="installCMS()" id="install-btn" data-i18n="install_btn">Instalar</button>
+        <button class="primary" onclick="installCMS(this)" id="install-btn" data-i18n="install_btn">Instalar</button>
       </div>
     </div>
     <div class="progress-log" id="install-log"></div>
@@ -252,9 +268,14 @@
     <div class="terminal-bar">
       <label for="term-cwd" data-i18n="terminal_cwd">Carpeta</label>
       <input id="term-cwd" type="text" value="/" placeholder="/wp-test">
-      <input id="term-cmd" type="text" placeholder="ls -la" onkeydown="if(event.key==='Enter') runTerminalCommand()">
-      <button class="primary" onclick="runTerminalCommand()" data-i18n="terminal_run">Ejecutar</button>
+      <button class="primary" onclick="startTerminalSession(this)" data-i18n="terminal_connect">Conectar</button>
+      <button onclick="stopTerminalSession()" data-i18n="terminal_disconnect">Desconectar</button>
+      <button onclick="sendTerminalCtrlC()" data-i18n="terminal_ctrlc">Ctrl+C</button>
       <button onclick="clearTerminalOutput()" data-i18n="terminal_clear">Limpiar</button>
+    </div>
+    <div class="terminal-bar">
+      <input id="term-cmd" type="text" placeholder="Escribe comando y Enter" onkeydown="if(event.key==='Enter') sendTerminalLine()">
+      <button class="primary" onclick="sendTerminalLine()" data-i18n="terminal_run">Ejecutar</button>
     </div>
     <pre id="terminal-output"></pre>
   </section>

@@ -11,6 +11,14 @@ const LOG_CONTAINERS = {
   panel: 'xampp-panel',
 }
 
+function stripAnsiAndCtl(s) {
+  return s
+    // ANSI escape sequences
+    .replace(/\x1b\[[0-9;]*[A-Za-z]/g, '')
+    // Other non-printable control chars except \n \r \t
+    .replace(/[^\x09\x0A\x0D\x20-\x7E\xA0-\uFFFF]/g, '')
+}
+
 // SSE — tail live logs from a container
 router.get('/:service', (req, res) => {
   const containerName = LOG_CONTAINERS[req.params.service]
@@ -28,11 +36,21 @@ router.get('/:service', (req, res) => {
       return res.end()
     }
 
+    // Docker non-TTY logs are multiplexed with 8-byte headers.
+    let buf = Buffer.alloc(0)
     stream.on('data', (chunk) => {
-      const lines = chunk.toString('utf8').split('\n')
-      for (const line of lines) {
-        const clean = line.replace(/^[\x00-\x08].*?[\x00-\xFF]{4}/, '').trim()
-        if (clean) res.write(`data: ${clean}\n\n`)
+      buf = Buffer.concat([buf, chunk])
+      while (buf.length >= 8) {
+        const payloadLen = buf.readUInt32BE(4)
+        if (buf.length < 8 + payloadLen) break
+        const payload = buf.slice(8, 8 + payloadLen).toString('utf8')
+        buf = buf.slice(8 + payloadLen)
+
+        const lines = payload.split('\n')
+        for (const line of lines) {
+          const clean = stripAnsiAndCtl(line).trim()
+          if (clean) res.write(`data: ${clean}\n\n`)
+        }
       }
     })
 

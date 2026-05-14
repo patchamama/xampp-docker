@@ -3,13 +3,17 @@ const fs = require('fs')
 const path = require('path')
 const https = require('https')
 const { execSync, exec } = require('child_process')
+const Docker = require('dockerode')
 const AdmZip = require('adm-zip')
 const tar = require('tar')
 const mysql = require('mysql2/promise')
 
 const router = express.Router()
+const docker = new Docker({ socketPath: '/var/run/docker.sock' })
 const HTDOCS = process.env.HTDOCS_PATH || '/htdocs'
 const MYSQL_HOST = process.env.MYSQL_HOST || 'mariadb'
+const PHP_CONTAINER = process.env.PHP_CONTAINER || 'xampp-php'
+const META_FILE = '.xampp-site.json'
 
 function sendEvent(res, data) {
   res.write(`data: ${JSON.stringify(data)}\n\n`)
@@ -22,20 +26,33 @@ async function getLatestVersion(cms) {
       return { version: data.offers[0].version, url: data.offers[0].download }
     }
     case 'joomla': {
-      const data = await fetchJSON('https://api.github.com/repos/joomla/joomla-cms/releases/latest')
-      const asset = data.assets.find(a => a.name.endsWith('.zip') && !a.name.includes('update'))
-      return { version: data.tag_name, url: asset.browser_download_url }
+      const versions = await getVersions('joomla')
+      if (!versions.length) throw new Error('Could not find a compatible Joomla release asset')
+      return { version: versions[0].version, url: versions[0].url }
     }
     case 'mediawiki': {
-      const data = await fetchJSON('https://api.github.com/repos/wikimedia/mediawiki/releases/latest')
-      const asset = data.assets.find(a => a.name.endsWith('.tar.gz'))
-      return { version: data.tag_name, url: asset.browser_download_url }
+      const versions = await getVersions('mediawiki')
+      if (!versions.length) throw new Error('Could not resolve latest MediaWiki version')
+      return { version: versions[0].version, url: versions[0].url }
     }
     case 'drupal': {
-      const data = await fetchJSON('https://www.drupal.org/api-d7/node.json?type=project_release&field_project=3060&taxonomy_vocabulary_7=13028&sort=field_release_version_major,field_release_version_minor,field_release_version_patch&direction=DESC&limit=1')
-      const node = data.list[0]
-      const url = node.field_release_file.uri.replace('public://', 'https://ftp.drupal.org/files/projects/')
-      return { version: node.field_release_version, url }
+      // Use GitHub releases API and fallback to tag tarball URL when assets are absent.
+      const data = await fetchJSON('https://api.github.com/repos/drupal/drupal/releases/latest')
+      const assets = Array.isArray(data?.assets) ? data.assets : []
+      const asset = assets.find(a =>
+        a?.name?.endsWith('.tar.gz') ||
+        a?.name?.endsWith('.zip')
+      )
+      if (asset?.browser_download_url) {
+        return { version: data.tag_name, url: asset.browser_download_url }
+      }
+
+      const tag = String(data?.tag_name || '').replace(/^v/i, '')
+      if (!tag) throw new Error('Could not resolve latest Drupal release')
+      return {
+        version: tag,
+        url: `https://github.com/drupal/drupal/archive/refs/tags/${tag}.tar.gz`
+      }
     }
   }
 }
@@ -57,6 +74,9 @@ function downloadFile(url, dest) {
     const get = (u) => {
       https.get(u, { headers: { 'User-Agent': 'XAMPP-Panel/1.0' } }, (res) => {
         if (res.statusCode === 302 || res.statusCode === 301) return get(res.headers.location)
+        if (res.statusCode !== 200) {
+          return reject(new Error(`Download failed with HTTP ${res.statusCode} for ${u}`))
+        }
         res.pipe(file)
         file.on('finish', () => file.close(resolve))
       }).on('error', reject)
@@ -65,11 +85,169 @@ function downloadFile(url, dest) {
   })
 }
 
+function fetchText(url) {
+  return new Promise((resolve, reject) => {
+    const options = { headers: { 'User-Agent': 'XAMPP-Panel/1.0' } }
+    https.get(url, options, (res) => {
+      let data = ''
+      res.on('data', c => data += c)
+      res.on('end', () => resolve(data))
+    }).on('error', reject)
+  })
+}
+
+async function getVersions(cms) {
+  const getPhpCliVersion = () => {
+    try {
+      return execSync(`php -r "echo PHP_VERSION;"`, { encoding: 'utf8' }).trim()
+    } catch {
+      return '0.0.0'
+    }
+  }
+  const phpCliVersion = getPhpCliVersion()
+
+  switch (cms) {
+    case 'wordpress': {
+      const data = await fetchJSON('https://api.wordpress.org/core/version-check/1.7/')
+      const offers = Array.isArray(data?.offers) ? data.offers : []
+      return offers.slice(0, 15).map((o, i) => ({
+        version: o.version,
+        url: o.download,
+        channel: i === 0 ? 'stable' : 'legacy'
+      }))
+    }
+    case 'joomla': {
+      const releases = await fetchJSON('https://api.github.com/repos/joomla/joomla-cms/releases?per_page=30')
+      const supportsJoomla6 = versionCompare(phpCliVersion, '8.3.0') >= 0
+      return (Array.isArray(releases) ? releases : [])
+        .filter(r => !r.prerelease && !r.draft)
+        .map((r, i) => {
+          const version = String(r.tag_name).replace(/^v/i, '')
+          const major = parseInt(version.split('.')[0] || '0', 10)
+          if (major >= 6 && !supportsJoomla6) return null
+          const asset = (r.assets || []).find(a => a?.name?.endsWith('.zip') && !a.name.includes('update'))
+          return asset ? {
+            version,
+            url: asset.browser_download_url,
+            channel: i === 0 ? 'stable' : 'legacy'
+          } : null
+        })
+        .filter(Boolean)
+    }
+    case 'mediawiki': {
+      const html = await fetchText('https://www.mediawiki.org/wiki/Download/en')
+      const matches = [...html.matchAll(/https:\/\/releases\.wikimedia\.org\/mediawiki\/(\d+\.\d+)\/mediawiki-(\d+\.\d+\.\d+)\.tar\.gz/g)]
+      const seen = new Set()
+      const versions = []
+      for (const m of matches) {
+        const majorMinor = m[1]
+        const v = m[2]
+        if (seen.has(v)) continue
+        seen.add(v)
+        versions.push({ majorMinor, version: v })
+      }
+      return versions.slice(0, 10).map((entry, i) => {
+        const v = entry.version
+        return {
+          version: v,
+          url: `https://releases.wikimedia.org/mediawiki/${entry.majorMinor}/mediawiki-${v}.tar.gz`,
+          channel: i === 0 ? 'stable' : (i === 2 ? 'lts' : 'legacy')
+        }
+      })
+    }
+    case 'drupal': {
+      const releases = await fetchJSON('https://api.github.com/repos/drupal/drupal/releases?per_page=30')
+      return (Array.isArray(releases) ? releases : [])
+        .filter(r => !r.prerelease && !r.draft)
+        .map((r, i) => {
+          const asset = (r.assets || []).find(a => a?.name?.endsWith('.tar.gz') || a?.name?.endsWith('.zip'))
+          const version = String(r.tag_name || '').replace(/^v/i, '')
+          if (!version) return null
+          return {
+            version,
+            url: asset?.browser_download_url || `https://github.com/drupal/drupal/archive/refs/tags/${version}.tar.gz`,
+            channel: i === 0 ? 'stable' : 'legacy'
+          }
+        })
+        .filter(Boolean)
+    }
+    default:
+      return []
+  }
+}
+
+function versionCompare(a, b) {
+  const pa = String(a).split('.').map(n => parseInt(n, 10) || 0)
+  const pb = String(b).split('.').map(n => parseInt(n, 10) || 0)
+  const len = Math.max(pa.length, pb.length)
+  for (let i = 0; i < len; i++) {
+    const x = pa[i] || 0
+    const y = pb[i] || 0
+    if (x > y) return 1
+    if (x < y) return -1
+  }
+  return 0
+}
+
 async function createDatabase(dbName) {
   const conn = await mysql.createConnection({ host: MYSQL_HOST, user: 'root', password: '' })
   await conn.execute(`CREATE DATABASE IF NOT EXISTS \`${dbName}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`)
   await conn.end()
 }
+
+async function execInPhpContainer(cmd) {
+  const container = docker.getContainer(PHP_CONTAINER)
+  const execObj = await container.exec({
+    Cmd: ['sh', '-lc', cmd],
+    AttachStdout: true,
+    AttachStderr: true,
+  })
+
+  const stream = await execObj.start({ hijack: true, stdin: false })
+  let stdout = ''
+  let stderr = ''
+
+  await new Promise((resolve, reject) => {
+    container.modem.demuxStream(stream, {
+      write: (chunk) => { stdout += chunk.toString('utf8') }
+    }, {
+      write: (chunk) => { stderr += chunk.toString('utf8') }
+    })
+    stream.on('end', resolve)
+    stream.on('error', reject)
+  })
+
+  const inspect = await execObj.inspect()
+  if (inspect.ExitCode !== 0) {
+    const err = new Error(`Command failed in ${PHP_CONTAINER}: ${cmd}`)
+    err.stdout = stdout
+    err.stderr = stderr
+    err.exitCode = inspect.ExitCode
+    throw err
+  }
+  return { stdout, stderr }
+}
+
+function getAdminUrl(cms, dir) {
+  switch ((cms || '').toLowerCase()) {
+    case 'wordpress': return `http://localhost/${dir}/wp-admin`
+    case 'joomla': return `http://localhost/${dir}/administrator`
+    case 'mediawiki': return `http://localhost/${dir}/index.php?title=Special:UserLogin`
+    case 'drupal': return `http://localhost/${dir}/user/login`
+    default: return `http://localhost/${dir}`
+  }
+}
+
+router.get('/versions', async (req, res) => {
+  try {
+    const cms = String(req.query.cms || '').toLowerCase()
+    if (!cms) return res.status(400).json({ error: 'Missing cms' })
+    const versions = await getVersions(cms)
+    res.json({ cms, versions })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
 
 router.post('/', async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream')
@@ -77,7 +255,7 @@ router.post('/', async (req, res) => {
   res.setHeader('Connection', 'keep-alive')
   res.flushHeaders()
 
-  const { cms, dir, title, adminUser, adminPass, adminEmail, overwrite } = req.body || {}
+  const { cms, dir, title, adminUser, adminPass, adminEmail, overwrite, version, customUrl } = req.body || {}
 
   if (!cms || !dir || !title || !adminUser || !adminPass || !adminEmail) {
     sendEvent(res, { error: 'Missing required fields' })
@@ -100,12 +278,27 @@ router.post('/', async (req, res) => {
 
     // 2. Fetch latest version info
     sendEvent(res, { step: 'fetch', message: `Fetching latest ${cms} version...` })
-    const { version, url } = await getLatestVersion(cms.toLowerCase())
-    sendEvent(res, { step: 'fetch', message: `Found ${cms} ${version}` })
+    let resolved
+    if (customUrl) {
+      if (!/^https?:\/\//i.test(customUrl)) {
+        throw new Error('Custom URL must start with http:// or https://')
+      }
+      const guessedVersion = version || 'custom'
+      resolved = { version: guessedVersion, url: customUrl }
+    } else if (version) {
+      const versions = await getVersions(cms.toLowerCase())
+      resolved = versions.find(v => v.version === version)
+      if (!resolved) throw new Error(`Selected version ${version} is not available for ${cms}`)
+    } else {
+      const { version: latestVersion, url: latestUrl } = await getLatestVersion(cms.toLowerCase())
+      resolved = { version: latestVersion, url: latestUrl }
+    }
+    const { version: pickedVersion, url } = resolved
+    sendEvent(res, { step: 'fetch', message: `Found ${cms} ${pickedVersion}` })
 
     // 3. Download
-    sendEvent(res, { step: 'download', message: `Downloading ${cms} ${version}...` })
-    const tmpFile = `/tmp/${cms}-${version}${url.endsWith('.tar.gz') ? '.tar.gz' : '.zip'}`
+    sendEvent(res, { step: 'download', message: `Downloading ${cms} ${pickedVersion}...` })
+    const tmpFile = `/tmp/${cms}-${pickedVersion}${url.endsWith('.tar.gz') ? '.tar.gz' : '.zip'}`
     await downloadFile(url, tmpFile)
     sendEvent(res, { step: 'download', message: 'Download complete.' })
 
@@ -138,12 +331,12 @@ router.post('/', async (req, res) => {
 
     switch (cms.toLowerCase()) {
       case 'wordpress':
-        execSync(`wp config create --path=${targetDir} --dbname=${dbName} --dbuser=root --dbpass= --dbhost=${MYSQL_HOST} --allow-root`)
-        execSync(`wp core install --path=${targetDir} --url=http://localhost/${dir} --title="${title}" --admin_user=${adminUser} --admin_password=${adminPass} --admin_email=${adminEmail} --skip-email --allow-root`)
+        await execInPhpContainer(`wp config create --path=${targetDir} --dbname=${dbName} --dbuser=root --dbpass= --dbhost=${MYSQL_HOST} --allow-root`)
+        await execInPhpContainer(`wp core install --path=${targetDir} --url=http://localhost/${dir} --title="${title}" --admin_user=${adminUser} --admin_password=${adminPass} --admin_email=${adminEmail} --skip-email --allow-root`)
         break
 
       case 'joomla':
-        execSync(`php ${targetDir}/installation/joomla.php install \
+        await execInPhpContainer(`php ${targetDir}/installation/joomla.php install \
           --site-name="${title}" \
           --admin-user="${adminUser}" \
           --admin-username="${adminUser}" \
@@ -160,7 +353,7 @@ router.post('/', async (req, res) => {
         break
 
       case 'mediawiki': {
-        execSync(`php ${targetDir}/maintenance/install.php \
+        await execInPhpContainer(`php ${targetDir}/maintenance/install.php \
           --dbtype=mysql \
           --dbserver=${MYSQL_HOST} \
           --dbuser=root \
@@ -172,7 +365,7 @@ router.post('/', async (req, res) => {
       }
 
       case 'drupal':
-        execSync(`drush --root=${targetDir} site:install standard \
+        await execInPhpContainer(`drush --root=${targetDir} site:install standard \
           --db-url=mysql://root:@${MYSQL_HOST}/${dbName} \
           --site-name="${title}" \
           --account-name=${adminUser} \
@@ -184,6 +377,31 @@ router.post('/', async (req, res) => {
 
     sendEvent(res, { step: 'install', message: 'Installation complete.' })
 
+    const frontendUrl = `http://localhost/${dir}`
+    const adminUrl = getAdminUrl(cms, dir)
+    const summary = {
+      site: dir,
+      cms: cms.toLowerCase(),
+      urls: {
+        frontend: frontendUrl,
+        admin: adminUrl,
+        phpmyadmin: `http://localhost:8081/index.php?route=/database/structure&db=${encodeURIComponent(dbName)}`
+      },
+      db: {
+        host: MYSQL_HOST,
+        name: dbName,
+        user: 'root',
+        password: ''
+      },
+      admin: {
+        username: adminUser,
+        password: adminPass,
+        email: adminEmail
+      }
+    }
+    fs.writeFileSync(path.join(targetDir, META_FILE), JSON.stringify(summary, null, 2), 'utf8')
+    sendEvent(res, { step: 'summary', message: 'Installation summary ready.', summary })
+
     // 7. Cleanup tmp
     fs.rmSync(tmpFile, { force: true })
     fs.rmSync(tmpExtract, { recursive: true, force: true })
@@ -191,12 +409,14 @@ router.post('/', async (req, res) => {
     sendEvent(res, {
       step: 'done',
       message: `${cms} installed successfully!`,
-      url: `http://localhost/${dir}`,
-      adminUrl: `http://localhost/${dir}/wp-admin` // generic; overridden in UI per CMS
+      url: frontendUrl,
+      adminUrl
     })
 
   } catch (err) {
-    sendEvent(res, { error: err.message })
+    const stderr = err?.stderr ? String(err.stderr) : ''
+    const details = stderr.trim()
+    sendEvent(res, { error: details ? `${err.message}\n${details}` : err.message })
   }
 
   res.end()

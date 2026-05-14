@@ -118,6 +118,42 @@ check_docker_running() {
   fi
 }
 
+preflight_registry_access() {
+  echo -e "${BOLD}Checking Docker Hub access...${NC}"
+
+  # Fast probe that often surfaces credential helper issues early
+  if docker manifest inspect php:8.4-apache >/dev/null 2>&1 \
+    && docker manifest inspect debian:bookworm-slim >/dev/null 2>&1; then
+    echo -e "  ${GREEN}✓${NC} Acceso al registry OK"
+    echo ""
+    return 0
+  fi
+
+  echo -e "  ${YELLOW}⚠ Possible Docker credential issue.${NC}"
+  echo -e "  Trying anonymous mode..."
+  local tmp_docker_cfg
+  tmp_docker_cfg="$(mktemp -d)"
+  printf '{ "auths": {} }\n' > "${tmp_docker_cfg}/config.json"
+
+  if DOCKER_CONFIG="$tmp_docker_cfg" docker manifest inspect php:8.4-apache >/dev/null 2>&1 \
+    && DOCKER_CONFIG="$tmp_docker_cfg" docker manifest inspect debian:bookworm-slim >/dev/null 2>&1; then
+    echo -e "  ${GREEN}✓${NC} Anonymous mode OK. The script will retry build anonymously if needed."
+    rm -rf "$tmp_docker_cfg"
+    echo ""
+    return 0
+  fi
+
+  rm -rf "$tmp_docker_cfg"
+  echo ""
+  echo -e "${RED}✗ No usable access to Docker Hub (neither authenticated nor anonymous).${NC}"
+  echo "  Suggestions:"
+  echo "   1) Open Docker Desktop and sign in again"
+  echo "   2) Ejecuta: docker logout && docker login"
+  echo "   3) Check your network/corporate proxy/VPN"
+  echo ""
+  return 1
+}
+
 stop_xampp_if_running() {
   if [[ -f /Applications/XAMPP/xamppfiles/ctlscript.sh ]]; then
     local mysql_pid
@@ -337,7 +373,7 @@ print_access_info() {
 ensure_sudo() {
   if [[ $EUID -ne 0 ]]; then
     SCRIPT_ABS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
-    echo -e "${YELLOW}⚠  Este script necesita sudo para copiar datos de XAMPP.${NC}"
+    echo -e "${YELLOW}⚠  This script needs sudo to copy XAMPP data.${NC}"
     echo "   Re-ejecutando con sudo..."
     echo ""
     exec sudo bash "$SCRIPT_ABS" "$@"
@@ -362,7 +398,7 @@ copy_xampp_data() {
 
   [[ $needs_copy -eq 0 ]] && return 0
 
-  echo -e "${BOLD}Copiando datos de XAMPP a ${dest}...${NC}"
+  echo -e "${BOLD}Copying XAMPP data to ${dest}...${NC}"
   echo ""
 
   mkdir -p "$dest/htdocs" "$dest/mysql" \
@@ -370,24 +406,24 @@ copy_xampp_data() {
     "$dest/config/mysql" "$dest/config/proftpd"
 
   if [[ -d "$xampp_htdocs" && ! -d "$dest/htdocs/$(ls "$xampp_htdocs" 2>/dev/null | head -1)" ]]; then
-    echo -n "  Copiando htdocs... "
+    echo -n "  Copying htdocs... "
     cp -rp "$xampp_htdocs/." "$dest/htdocs/"
-    echo -e "${GREEN}listo${NC}"
+    echo -e "${GREEN}done${NC}"
   fi
 
   if [[ -d "$xampp_mysql" ]]; then
-    echo -n "  Copiando MySQL data... "
+    echo -n "  Copying MySQL data... "
     cp -rp "$xampp_mysql/." "$dest/mysql/"
-    echo -e "${GREEN}listo${NC}"
+    echo -e "${GREEN}done${NC}"
   fi
 
   # Always sync config files from Docker/config so edits in panel persist
-  echo -n "  Sincronizando archivos de configuración... "
+  echo -n "  Syncing configuration files... "
   [[ -f "$docker_config/php/php.ini"           ]] && cp "$docker_config/php/php.ini"           "$dest/config/php/"
   [[ -f "$docker_config/apache/httpd.conf"      ]] && cp "$docker_config/apache/httpd.conf"      "$dest/config/apache/"
   [[ -f "$docker_config/mysql/my.cnf"           ]] && cp "$docker_config/mysql/my.cnf"           "$dest/config/mysql/"
   [[ -f "$docker_config/proftpd/proftpd.conf"   ]] && cp "$docker_config/proftpd/proftpd.conf"   "$dest/config/proftpd/"
-  echo -e "${GREEN}listo${NC}"
+  echo -e "${GREEN}done${NC}"
 
   chown -R "$REAL_USER" "$dest"
   echo ""
@@ -412,19 +448,20 @@ rebuild_from_scratch() {
 
   echo -e "${RED}⚠  RECONSTRUCCIÓN COMPLETA${NC}"
   echo ""
-  echo "  Esto hará:"
+  echo "  This will:"
   echo "    • Detener y eliminar todos los contenedores del stack"
-  echo "    • Eliminar las imágenes construidas (no las de terceros)"
-  echo "    • Eliminar volúmenes Docker del stack"
-  echo "    • Reconstruir todas las imágenes desde cero (--no-cache)"
-  echo "    • Levantar el stack nuevamente"
+  echo "    • Remove all stack containers"
+  echo "    • Remove locally built images (not third-party images)"
+  echo "    • Remove stack Docker volumes"
+  echo "    • Rebuild all images from scratch (--no-cache)"
+  echo "    • Start the stack again"
   echo ""
-  echo -e "  ${YELLOW}Los datos en ~/xampp-data/ NO se tocan.${NC}"
+  echo -e "  ${YELLOW}Data in ~/xampp-data/ will NOT be touched.${NC}"
   echo ""
-  read -r -p "  ¿Continuar? [s/N] " confirm
+  read -r -p "  Continue? [y/N] " confirm
   confirm=${confirm:-N}
-  if [[ ! "$confirm" =~ ^[Ss]$ ]]; then
-    echo "  Cancelado."
+  if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+    echo "  Cancelled."
     exit 0
   fi
 
@@ -444,7 +481,7 @@ rebuild_from_scratch() {
   echo -e "      ${GREEN}✓${NC}"
   echo ""
 
-  echo -e "${BOLD}[2/4] Eliminando imágenes construidas localmente...${NC}"
+  echo -e "${BOLD}[2/4] Removing locally built images...${NC}"
   # Only remove images built by this compose project (not pulled images like mariadb, phpmyadmin)
   local images
   images=$($COMPOSE_CMD images -q 2>/dev/null || true)
@@ -456,26 +493,43 @@ rebuild_from_scratch() {
   echo -e "      ${GREEN}✓${NC}"
   echo ""
 
-  echo -e "${BOLD}[3/4] Limpiando caché de build...${NC}"
+  echo -e "${BOLD}[3/4] Cleaning build cache...${NC}"
   docker builder prune -f --filter type=exec.cachemount 2>/dev/null || true
   echo -e "      ${GREEN}✓${NC}"
   echo ""
 
-  echo -e "${BOLD}[4/4] Reconstruyendo imágenes desde cero...${NC}"
-  $COMPOSE_CMD build --no-cache --pull
+  echo -e "${BOLD}[4/4] Rebuilding images from scratch...${NC}"
+  if ! $COMPOSE_CMD build --no-cache --pull; then
+    echo ""
+    echo -e "${YELLOW}⚠ Build failed with Docker credentials. Retrying in anonymous mode...${NC}"
+    local tmp_docker_cfg
+    tmp_docker_cfg="$(mktemp -d)"
+    printf '{ "auths": {} }\n' > "${tmp_docker_cfg}/config.json"
+    if ! DOCKER_CONFIG="$tmp_docker_cfg" $COMPOSE_CMD build --no-cache --pull; then
+      rm -rf "$tmp_docker_cfg"
+      echo ""
+      echo -e "${RED}✗ Could not rebuild images.${NC}"
+      echo "  Suggestions:"
+      echo "   1) Open Docker Desktop and sign in again to Docker Hub"
+      echo "   2) Ejecuta: docker logout && docker login"
+      echo "   3) Reintenta ./start-docker.sh"
+      exit 1
+    fi
+    rm -rf "$tmp_docker_cfg"
+  fi
   echo ""
-  echo -e "      ${GREEN}✓ Reconstrucción completa.${NC}"
+  echo -e "      ${GREEN}✓ Rebuild completed.${NC}"
   echo ""
 }
 
 show_menu() {
-  echo -e "${BOLD}  ¿Qué querés hacer?${NC}"
+  echo -e "${BOLD}  What do you want to do?${NC}"
   echo ""
-  echo "    [1] Iniciar el stack  (normal)"
-  echo "    [2] Copiar datos de XAMPP y luego iniciar"
-  echo "    [3] Reconstruir todo desde cero y luego iniciar"
+  echo "    [1] Start the stack (normal)"
+  echo "    [2] Copy XAMPP data and then start"
+  echo "    [3] Rebuild everything from scratch and then start"
   echo ""
-  read -r -p "  Opción [1]: " menu_choice
+  read -r -p "  Option [1]: " menu_choice
   menu_choice=${menu_choice:-1}
   echo ""
 }
@@ -502,6 +556,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 case "$menu_choice" in
   3)
+    preflight_registry_access || exit 1
     ensure_sudo "$@"
     rebuild_from_scratch "$SCRIPT_DIR"
     stop_xampp_if_running

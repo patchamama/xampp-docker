@@ -1,9 +1,10 @@
-FROM node:20-bullseye-slim
+FROM node:20-bookworm-slim
 
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates curl unzip tar git mariadb-client php-cli php-mysql \
+    ca-certificates curl unzip tar git mariadb-client \
+    php-cli php-mysql php-xml php-mbstring php-curl php-zip php-intl \
     && rm -rf /var/lib/apt/lists/*
 
 # Composer
