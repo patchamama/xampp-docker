@@ -21,11 +21,12 @@ function detectCMS(dirPath) {
   const has = (f) => fs.existsSync(path.join(dirPath, f))
   const read = (f) => { try { return JSON.parse(fs.readFileSync(path.join(dirPath, f), 'utf8')) } catch { return null } }
 
-  if (has('wp-config.php')) return 'WordPress'
-  if (has('LocalSettings.php')) return 'MediaWiki'
-  if (has('configuration.php') && has('libraries')) return 'Joomla'
+  if (has('wp-config.php') || has('wp-login.php') || has('wp-includes/version.php')) return 'WordPress'
+  // Joomla: configuration.php (installed) OR administrator + components dirs (any version)
+  if (has('LocalSettings.php') || (has('includes/DefaultSettings.php')) || (has('api.php') && has('extensions') && has('maintenance'))) return 'MediaWiki'
+  if (has('configuration.php') || (has('administrator') && has('components') && has('libraries'))) return 'Joomla'
   const composer = read('composer.json')
-  if (composer?.require?.['drupal/core'] || composer?.require?.['drupal/drupal']) return 'Drupal'
+  if (composer?.require?.['drupal/core'] || composer?.require?.['drupal/drupal'] || has('core/lib/Drupal.php')) return 'Drupal'
   if (has('index.php') || has('index.html')) return 'PHP'
   return null
 }
