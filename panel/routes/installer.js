@@ -283,6 +283,7 @@ router.post('/', async (req, res) => {
   }
 
   const targetDir = path.join(HTDOCS, dir)
+  const phpTargetDir = `/var/www/html/${dir}`
   const dbName = dir.replace(/[^a-z0-9_]/gi, '_')
 
   try {
@@ -351,12 +352,12 @@ router.post('/', async (req, res) => {
 
     switch (cms.toLowerCase()) {
       case 'wordpress':
-        await execInPhpContainer(`wp config create --path=${targetDir} --dbname=${dbName} --dbuser=root --dbpass= --dbhost=${MYSQL_HOST} --allow-root`)
-        await execInPhpContainer(`wp core install --path=${targetDir} --url=http://localhost/${dir} --title="${title}" --admin_user=${adminUser} --admin_password=${adminPass} --admin_email=${adminEmail} --skip-email --allow-root`)
+        await execInPhpContainer(`wp config create --path=${phpTargetDir} --dbname=${dbName} --dbuser=root --dbpass= --dbhost=${MYSQL_HOST} --allow-root`)
+        await execInPhpContainer(`wp core install --path=${phpTargetDir} --url=http://localhost/${dir} --title="${title}" --admin_user=${adminUser} --admin_password=${adminPass} --admin_email=${adminEmail} --skip-email --allow-root`)
         break
 
       case 'joomla':
-        await execInPhpContainer(`php ${targetDir}/installation/joomla.php install \
+        await execInPhpContainer(`php ${phpTargetDir}/installation/joomla.php install \
           --site-name="${title}" \
           --admin-user="${adminUser}" \
           --admin-username="${adminUser}" \
@@ -373,7 +374,7 @@ router.post('/', async (req, res) => {
         break
 
       case 'mediawiki': {
-        await execInPhpContainer(`php ${targetDir}/maintenance/install.php \
+        await execInPhpContainer(`php ${phpTargetDir}/maintenance/install.php \
           --dbtype=mysql \
           --dbserver=${MYSQL_HOST} \
           --dbuser=root \
@@ -385,7 +386,7 @@ router.post('/', async (req, res) => {
       }
 
       case 'drupal':
-        await execInPhpContainer(`drush --root=${targetDir} site:install standard \
+        await execInPhpContainer(`drush --root=${phpTargetDir} site:install standard \
           --db-url=mysql://root:@${MYSQL_HOST}/${dbName} \
           --site-name="${title}" \
           --account-name=${adminUser} \
