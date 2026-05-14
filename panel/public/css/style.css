@@ -690,33 +690,33 @@ textarea {
 }
 .gallery-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, 160px);
-  justify-content: start;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 12px;
   padding: 16px;
   overflow-y: auto;
 }
 .gallery-item {
-  width: 160px;
   background: var(--surface2);
   border: 1px solid var(--border);
   border-radius: 8px;
-  overflow: hidden;
+  overflow: visible;
   cursor: pointer;
   transition: border-color .15s, transform .15s;
-  display: flex;
-  flex-direction: column;
 }
 .gallery-item:hover { border-color: var(--accent); transform: scale(1.02); }
 .gallery-item-thumb {
-  width: 160px;
-  height: 160px;
-  flex-shrink: 0;
-  background-color: #111;
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  border-radius: 7px 7px 0 0;
+  background: #111;
   cursor: pointer;
+}
+.gallery-item-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 .gallery-item-name {
   font-size: .7rem;

@@ -877,8 +877,9 @@ async function openImageGallery() {
     const item = document.createElement('div')
     item.className = 'gallery-item'
     item.innerHTML = `
-      <div class="gallery-item-thumb" onclick="galleryView('${img.path}')"
-           style="background-image:url('${url}')"></div>
+      <div class="gallery-item-thumb" onclick="galleryView('${img.path}')">
+        <img src="${url}" alt="${img.name}" loading="lazy">
+      </div>
       <div class="gallery-item-name" title="${img.path}">${img.name}</div>
       <div class="gallery-item-actions">
         <button onclick="galleryRename('${img.path}')">✏️</button>
