@@ -1,0 +1,24 @@
+# Environment — contains local absolute paths, never commit
+.env
+.env.bak
+.env.*.bak
+
+# SSL keys
+ssl/server.key
+ssl/server.crt
+
+# Node
+panel/node_modules/
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Docker build artifacts
+.playwright-mcp/
+
+# Claude Code project settings
+.claude/
+
+# Backup files created by sed -i.bak
+*.bak

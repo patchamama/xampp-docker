@@ -1,0 +1,101 @@
+name: xampp
+
+services:
+
+  php-apache:
+    container_name: xampp-php
+    build:
+      context: .
+      dockerfile: Dockerfile.php
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    volumes:
+      - ${HTDOCS_PATH:-~/xampp-data/htdocs}:/var/www/html
+      - ${CONFIG_PATH:-~/xampp-data/config}/php/php.ini:/usr/local/etc/php/php.ini
+      - ./ssl:/etc/ssl/xampp
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    networks:
+      - xampp-net
+    restart: unless-stopped
+
+  mariadb:
+    container_name: xampp-mariadb
+    image: mariadb:10.4
+    environment:
+      MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - ${MYSQL_DATA_PATH:-~/xampp-data/mysql}:/var/lib/mysql
+      - ${CONFIG_PATH:-~/xampp-data/config}/mysql/my.cnf:/etc/mysql/conf.d/custom.cnf
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-u", "root", "--silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    networks:
+      - xampp-net
+    restart: unless-stopped
+
+  phpmyadmin:
+    container_name: xampp-pma
+    image: phpmyadmin:5.2
+    environment:
+      PMA_HOST: mariadb
+      PMA_USER: root
+      PMA_PASSWORD: ""
+      UPLOAD_LIMIT: 512M
+    ports:
+      - "${PHPMYADMIN_PORT:-8081}:80"
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    networks:
+      - xampp-net
+    restart: unless-stopped
+
+  proftpd:
+    container_name: xampp-ftp
+    build:
+      context: .
+      dockerfile: Dockerfile.proftpd
+    ports:
+      - "${FTP_PORT:-21}:21"
+      - "21000-21010:21000-21010"
+    volumes:
+      - ${HTDOCS_PATH:-~/xampp-data/htdocs}:/var/www/html
+      - ${CONFIG_PATH:-~/xampp-data/config}/proftpd/proftpd.conf:/etc/proftpd/proftpd.conf.d/xampp.conf
+    networks:
+      - xampp-net
+    restart: unless-stopped
+
+  control-panel:
+    container_name: xampp-panel
+    build:
+      context: ./panel
+      dockerfile: Dockerfile
+    ports:
+      - "${PANEL_PORT:-8080}:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${CONFIG_PATH:-~/xampp-data/config}:/app/config
+      - ${HTDOCS_PATH:-~/xampp-data/htdocs}:/htdocs:ro
+    environment:
+      PANEL_PORT: 8080
+      MYSQL_HOST: mariadb
+      MYSQL_USER: root
+      MYSQL_PASSWORD: ""
+      HTDOCS_PATH: /htdocs
+    depends_on:
+      - php-apache
+      - mariadb
+    networks:
+      - xampp-net
+    restart: unless-stopped
+
+networks:
+  xampp-net:
+    driver: bridge

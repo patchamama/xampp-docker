@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>XAMPP Control Panel</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- CodeMirror 5 -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/php/php.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.js"></script>
+  <!-- php mode needs xml + htmlmixed + clike as deps -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/xml/xml.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/htmlmixed/htmlmixed.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.js"></script>
+  <!-- extra modes for conf/ini/sql -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/properties/properties.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/sql/sql.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/shell/shell.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/css/css.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/markdown/markdown.js"></script>
+</head>
+<body>
+
+<!-- Sidebar toggle — outside sidebar so overflow:hidden can't clip it -->
+<button id="sidebar-toggle" onclick="toggleSidebar()" title="Colapsar menú">‹</button>
+
+<nav id="sidebar">
+  <div class="logo">
+    <h1>XAMPP</h1>
+    <small>Docker Control Panel</small>
+  </div>
+  <nav>
+    <a href="#" class="nav-link active" data-section="services">
+      <span class="icon">⚡</span><span class="nav-label" data-i18n="nav_services">Servicios</span>
+    </a>
+    <a href="#" class="nav-link" data-section="sites">
+      <span class="icon">🌐</span><span class="nav-label" data-i18n="nav_sites">Sitios</span>
+    </a>
+    <a href="#" class="nav-link" data-section="phpmyadmin">
+      <span class="icon">🗄️</span><span class="nav-label" data-i18n="nav_phpmyadmin">phpMyAdmin</span>
+    </a>
+    <a href="#" class="nav-link" data-section="config">
+      <span class="icon">⚙️</span><span class="nav-label" data-i18n="nav_config">Configuración</span>
+    </a>
+    <a href="#" class="nav-link" data-section="install">
+      <span class="icon">📦</span><span class="nav-label" data-i18n="nav_install">Instalar CMS</span>
+    </a>
+    <a href="#" class="nav-link" data-section="browser">
+      <span class="icon">📁</span><span class="nav-label" data-i18n="nav_browser">Archivos</span>
+    </a>
+    <a href="#" class="nav-link" data-section="languages">
+      <span class="icon">🔬</span><span class="nav-label" data-i18n="nav_languages">Lenguajes</span>
+    </a>
+    <a href="#" class="nav-link" data-section="logs">
+      <span class="icon">📋</span><span class="nav-label" data-i18n="nav_logs">Logs</span>
+    </a>
+  </nav>
+  <div class="lang-selector">
+    <button onclick="setLang('es')" id="lang-es">ES</button>
+    <button onclick="setLang('en')" id="lang-en">EN</button>
+    <button onclick="setLang('de')" id="lang-de">DE</button>
+  </div>
+</nav>
+
+<main id="main">
+
+  <!-- Services -->
+  <section id="section-services" class="section active">
+    <h2 data-i18n="services_title">Estado de Servicios</h2>
+    <div class="cards" id="services-cards">
+      <div class="card" id="card-apache">
+        <div class="card-header">
+          <span class="card-title" data-i18n="service_apache">Apache</span>
+          <span class="status-dot" id="dot-apache"></span>
+        </div>
+        <div class="status-label" id="label-apache">—</div>
+        <div class="btn-group">
+          <button onclick="serviceAction('apache','start')" data-i18n="btn_start">Iniciar</button>
+          <button onclick="serviceAction('apache','stop')" class="danger" data-i18n="btn_stop">Detener</button>
+          <button onclick="serviceAction('apache','restart')" data-i18n="btn_restart">Reiniciar</button>
+        </div>
+      </div>
+      <div class="card" id="card-mysql">
+        <div class="card-header">
+          <span class="card-title" data-i18n="service_mysql">MySQL / MariaDB</span>
+          <span class="status-dot" id="dot-mysql"></span>
+        </div>
+        <div class="status-label" id="label-mysql">—</div>
+        <div class="btn-group">
+          <button onclick="serviceAction('mysql','start')" data-i18n="btn_start">Iniciar</button>
+          <button onclick="serviceAction('mysql','stop')" class="danger" data-i18n="btn_stop">Detener</button>
+          <button onclick="serviceAction('mysql','restart')" data-i18n="btn_restart">Reiniciar</button>
+        </div>
+      </div>
+      <div class="card" id="card-proftpd">
+        <div class="card-header">
+          <span class="card-title" data-i18n="service_proftpd">ProFTPD</span>
+          <span class="status-dot" id="dot-proftpd"></span>
+        </div>
+        <div class="status-label" id="label-proftpd">—</div>
+        <div class="btn-group">
+          <button onclick="serviceAction('proftpd','start')" data-i18n="btn_start">Iniciar</button>
+          <button onclick="serviceAction('proftpd','stop')" class="danger" data-i18n="btn_stop">Detener</button>
+          <button onclick="serviceAction('proftpd','restart')" data-i18n="btn_restart">Reiniciar</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Sites -->
+  <section id="section-sites" class="section">
+    <h2 data-i18n="sites_title">Sitios en htdocs</h2>
+    <div id="sites-list"></div>
+  </section>
+
+  <!-- phpMyAdmin -->
+  <section id="section-phpmyadmin" class="section">
+    <h2 data-i18n="pma_title">phpMyAdmin</h2>
+    <div class="pma-box">
+      <h3>phpMyAdmin 5.2</h3>
+      <p data-i18n="pma_desc">Administrador de bases de datos MySQL/MariaDB</p>
+      <a href="http://localhost:8081" target="_blank">
+        <button class="primary" data-i18n="pma_open">Abrir phpMyAdmin</button>
+      </a>
+    </div>
+  </section>
+
+  <!-- Config -->
+  <section id="section-config" class="section">
+    <h2 data-i18n="config_title">Configuración</h2>
+    <div class="config-bar">
+      <select id="config-select" onchange="loadConfig(this.value)">
+        <option value="" data-i18n="config_select">Seleccionar archivo</option>
+        <option value="php.ini">php.ini</option>
+        <option value="httpd.conf">httpd.conf</option>
+        <option value="my.cnf">my.cnf</option>
+      </select>
+      <button class="primary" onclick="saveConfig()" data-i18n="config_save">Guardar y Reiniciar</button>
+    </div>
+    <textarea id="config-editor" spellcheck="false" placeholder="Seleccioná un archivo..."></textarea>
+    <div class="flash" id="config-flash"></div>
+  </section>
+
+  <!-- Install CMS -->
+  <section id="section-install" class="section">
+    <h2 data-i18n="install_title">Instalar CMS</h2>
+    <div class="form-grid">
+      <div class="form-group">
+        <label data-i18n="install_cms">CMS</label>
+        <select id="i-cms">
+          <option value="wordpress">WordPress</option>
+          <option value="joomla">Joomla</option>
+          <option value="mediawiki">MediaWiki</option>
+          <option value="drupal">Drupal</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label data-i18n="install_dir">Directorio</label>
+        <input type="text" id="i-dir" placeholder="mi-sitio">
+      </div>
+      <div class="form-group full">
+        <label data-i18n="install_site_title">Título del sitio</label>
+        <input type="text" id="i-title" placeholder="Mi Sitio Web">
+      </div>
+      <div class="form-group">
+        <label data-i18n="install_admin_user">Usuario admin</label>
+        <input type="text" id="i-user" placeholder="admin">
+      </div>
+      <div class="form-group">
+        <label data-i18n="install_admin_pass">Contraseña admin</label>
+        <input type="password" id="i-pass" placeholder="••••••••">
+      </div>
+      <div class="form-group full">
+        <label data-i18n="install_admin_email">Email admin</label>
+        <input type="email" id="i-email" placeholder="admin@example.com">
+      </div>
+      <div class="form-group full">
+        <button class="primary" onclick="installCMS()" id="install-btn" data-i18n="install_btn">Instalar</button>
+      </div>
+    </div>
+    <div class="progress-log" id="install-log"></div>
+  </section>
+
+  <!-- Browser -->
+  <section id="section-browser" class="section">
+    <div class="browser-header">
+      <h2 data-i18n="browser_title">Archivos</h2>
+      <button id="tree-toggle" onclick="toggleTreePanel()" title="Colapsar árbol">◀</button>
+      <button id="gallery-btn" onclick="openImageGallery()" title="Mosaico de imágenes" style="display:none">⊞</button>
+      <div class="breadcrumb" id="browser-breadcrumb"></div>
+    </div>
+
+    <div class="browser-workspace" id="browser-workspace">
+
+      <!-- File tree -->
+      <div class="browser-tree-panel" id="browser-tree-panel">
+        <div id="browser-list"></div>
+      </div>
+
+      <!-- Editor / preview panel -->
+      <div class="browser-editor-panel" id="browser-editor-panel" style="display:none">
+        <div class="browser-editor-bar">
+          <span class="browser-editor-filename" id="browser-editor-filename"></span>
+          <div class="browser-editor-actions">
+            <button id="browser-save-btn" class="primary" onclick="saveBrowserFile()" data-i18n="browser_save">Guardar</button>
+            <button id="browser-rename-btn" onclick="renameBrowserFile()" style="display:none" title="Renombrar">✏️</button>
+            <button id="browser-delete-btn" onclick="deleteBrowserFile()" style="display:none" class="danger" title="Borrar">🗑️</button>
+            <button id="browser-run-btn" onclick="runBrowserFile()" style="display:none" data-i18n="browser_run">▶ Ejecutar</button>
+            <button id="browser-open-btn" onclick="openBrowserUrl()" style="display:none" title="Abrir en navegador">↗</button>
+            <button onclick="closeBrowserEditor()">✕</button>
+          </div>
+        </div>
+        <div id="browser-cm"></div>
+        <div class="flash" id="browser-flash"></div>
+      </div>
+
+    </div>
+
+    <!-- Output panel (reuses lang output styles) -->
+    <div class="lang-output-wrap" id="browser-output-wrap" style="display:none;margin-top:12px">
+      <div class="lang-output-bar">
+        <span id="browser-output-label">Salida</span>
+        <button onclick="closeBrowserOutput()" class="lang-close-btn">✕</button>
+      </div>
+      <div class="lang-output-body" style="max-height:350px">
+        <iframe id="browser-out-frame" style="display:none;width:100%;height:350px;border:none;background:#fff"></iframe>
+        <pre    id="browser-out-pre"   class="lang-pre" style="display:none;max-height:350px"></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- Languages -->
+  <section id="section-languages" class="section">
+    <h2 data-i18n="languages_title">Prueba de Lenguajes</h2>
+
+    <div class="lang-toolbar">
+      <div class="lang-tabs">
+        <button class="lang-tab active" data-lang="php"    onclick="switchLang('php')">🐘 PHP</button>
+        <button class="lang-tab"        data-lang="php2"   onclick="switchLang('php2')">🐘 phpinfo()</button>
+        <button class="lang-tab"        data-lang="python" onclick="switchLang('python')">🐍 Python</button>
+        <button class="lang-tab"        data-lang="node"   onclick="switchLang('node')">💚 Node.js</button>
+      </div>
+      <button class="primary lang-run-btn" onclick="runLangEditor()" data-i18n="lang_run">▶ Ejecutar</button>
+    </div>
+
+    <div class="lang-workspace" id="lang-workspace">
+      <div class="lang-editor-panel" id="lang-editor-panel">
+        <div id="lang-cm-editor"></div>
+      </div>
+
+      <div class="lang-output-panel" id="lang-output-panel" style="display:none">
+        <div class="lang-output-bar">
+          <span data-i18n="lang_output">Salida</span>
+          <button onclick="clearLangOutput()" class="lang-close-btn">✕</button>
+        </div>
+        <div class="lang-output-body">
+          <iframe id="lang-out-frame" style="display:none;width:100%;height:100%;border:none;background:#fff"></iframe>
+          <pre    id="lang-out-pre"   class="lang-pre" style="display:none"></pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Logs -->
+  <section id="section-logs" class="section">
+    <h2 data-i18n="logs_title">Logs en Vivo</h2>
+    <div class="logs-bar">
+      <select id="logs-select" onchange="startLogs(this.value)">
+        <option value="" data-i18n="logs_select">Servicio</option>
+        <option value="apache">Apache</option>
+        <option value="mysql">MySQL</option>
+        <option value="ftp">ProFTPD</option>
+        <option value="panel">Panel</option>
+      </select>
+      <button onclick="clearLogs()">Clear</button>
+    </div>
+    <div id="log-output"></div>
+  </section>
+
+</main>
+
+<!-- Image gallery modal -->
+<div id="gallery-modal" style="display:none" onclick="if(event.target===this)closeImageGallery()">
+  <div class="gallery-box">
+    <div class="gallery-header">
+      <span id="gallery-title">Imágenes</span>
+      <button onclick="closeImageGallery()">✕</button>
+    </div>
+    <div class="gallery-grid" id="gallery-grid"></div>
+  </div>
+</div>
+
+<!-- Rename modal -->
+<div id="rename-modal" style="display:none" onclick="if(event.target===this)closeRenameModal()">
+  <div class="rename-box">
+    <div class="rename-header">
+      <span>Renombrar</span>
+      <button onclick="closeRenameModal()">✕</button>
+    </div>
+    <input id="rename-input" type="text" spellcheck="false">
+    <div class="rename-actions">
+      <button class="primary" onclick="confirmRename()">Renombrar</button>
+      <button onclick="closeRenameModal()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<script src="/js/app.js"></script>
+</body>
+</html>
