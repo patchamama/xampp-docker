@@ -558,9 +558,10 @@ rebuild_from_scratch() {
 show_menu() {
   echo -e "${BOLD}  What do you want to do?${NC}"
   echo ""
-  echo "    [1] Start the stack (normal)"
-  echo "    [2] Copy XAMPP data and then start"
-  echo "    [3] Rebuild everything from scratch and then start"
+  echo "    [1] Start containers (if stopped)"
+  echo "    [2] Restart containers"
+  echo "    [3] Copy XAMPP data and then start"
+  echo "    [4] Rebuild everything from scratch and then start"
   echo ""
   read -r -p "  Option [1]: " menu_choice
   menu_choice=${menu_choice:-1}
@@ -588,7 +589,7 @@ show_menu
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 case "$menu_choice" in
-  3)
+  4)
     preflight_registry_access || exit 1
     rebuild_from_scratch "$SCRIPT_DIR"
     stop_xampp_if_running
@@ -597,11 +598,19 @@ case "$menu_choice" in
     wait_for_services
     print_access_info
     ;;
-  2)
+  3)
     stop_xampp_if_running
     copy_xampp_data "$SCRIPT_DIR"
     check_docker_file_sharing
     start_stack
+    wait_for_services
+    print_access_info
+    ;;
+  2)
+    echo -e "${BOLD}Restarting containers...${NC}"
+    echo ""
+    compose_cmd restart
+    echo ""
     wait_for_services
     print_access_info
     ;;
