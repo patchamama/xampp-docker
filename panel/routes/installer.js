@@ -373,13 +373,14 @@ router.post('/', async (req, res) => {
       }
 
       case 'drupal':
-        await execInPhpContainer(`drush --root=${phpTargetDir} site:install standard \
+        // drush is installed in the panel container, not in xampp-php
+        execSync(`drush --root=${targetDir} site:install standard \
           --db-url=mysql://root:@${MYSQL_HOST}/${dbName} \
           --site-name="${title}" \
           --account-name=${adminUser} \
           --account-pass=${adminPass} \
           --account-mail=${adminEmail} \
-          --yes`)
+          --yes`, { stdio: 'pipe' })
         break
     }
 
