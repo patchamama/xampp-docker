@@ -1098,10 +1098,14 @@ async function browseDir(dirPath) {
       if (e.type === 'file' && e.runnable && e.runHow === 'exec') {
         actions += `<button class="browser-entry-btn run" onclick="event.stopPropagation();execBrowserFile('${filePath}','${e.runLang}')">▶</button>`
       }
+      // Extract button for compressed files
+      if (e.type === 'file' && /\.(zip|tar\.gz|tgz|tar)$/i.test(e.name)) {
+        actions += `<button class="browser-entry-btn extract" onclick="event.stopPropagation();extractBrowserFile('${filePath}')" title="Descomprimir">📦⬇</button>`
+      }
 
       row.innerHTML = `
         <span class="browser-entry-icon">${icon}</span>
-        <span class="${nameClass}">${e.name}</span>
+        <span class="${nameClass}" title="${e.name}">${e.name}</span>
         <span class="browser-entry-size">${fmtSize(e.size)}</span>
         <span class="browser-entry-actions">${actions}</span>`
 
@@ -1605,5 +1609,57 @@ async function deleteBackup(filename, btn) {
   } catch (err) {
     alert('✗ ' + err.message)
     if (btn) btn.disabled = false
+  }
+}
+
+// ── Browser upload & extract ───────────────────────────────────────────────
+
+async function uploadFiles(files) {
+  if (!files || !files.length) return
+  const dir = browserCurrentPath || '/'
+  const form = new FormData()
+  for (const f of files) form.append('files', f)
+
+  const btn = document.getElementById('upload-btn')
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Subiendo…' }
+  try {
+    const res = await fetch(`/api/browser/upload?path=${encodeURIComponent(dir)}`, { method: 'POST', body: form })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Upload failed')
+    browseDir(dir)
+  } catch (err) {
+    alert('✗ ' + err.message)
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '⬆ Subir' }
+    document.getElementById('upload-input').value = ''
+  }
+}
+
+function onBrowserDragOver(e) {
+  e.preventDefault()
+  document.getElementById('browser-dropzone').classList.add('active')
+}
+
+function onBrowserDragLeave(e) {
+  if (!e.currentTarget.contains(e.relatedTarget)) {
+    document.getElementById('browser-dropzone').classList.remove('active')
+  }
+}
+
+function onBrowserDrop(e) {
+  e.preventDefault()
+  document.getElementById('browser-dropzone').classList.remove('active')
+  uploadFiles(e.dataTransfer.files)
+}
+
+async function extractBrowserFile(filePath) {
+  if (!confirm(`¿Descomprimir "${filePath.split('/').pop()}" en el mismo directorio?`)) return
+  try {
+    const res = await fetch(`/api/browser/extract?path=${encodeURIComponent(filePath)}`, { method: 'POST' })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Extract failed')
+    browseDir(browserCurrentPath || '/')
+  } catch (err) {
+    alert('✗ ' + err.message)
   }
 }

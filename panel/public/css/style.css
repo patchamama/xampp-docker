@@ -1113,6 +1113,25 @@ textarea {
 #rename-input:focus { outline: none; border-color: var(--accent2); }
 .rename-actions { display: flex; gap: 8px; justify-content: flex-end; }
 
+/* Browser upload */
+#upload-btn { font-size: .8rem; padding: 4px 10px; border-radius: 5px; }
+.browser-dropzone {
+  display: none;
+  border: 2px dashed var(--accent2);
+  border-radius: 8px;
+  padding: 18px;
+  text-align: center;
+  color: var(--muted);
+  font-size: .9rem;
+  margin-bottom: 8px;
+  align-items: center;
+  justify-content: center;
+  transition: background .15s;
+}
+.browser-dropzone.active { display: flex; background: color-mix(in srgb, var(--accent2) 10%, transparent); }
+.browser-entry-btn.extract { font-size: .8rem; }
+.browser-entry-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 260px; }
+
 /* Backups */
 .backups-bar { display: flex; gap: 10px; align-items: center; margin-bottom: 16px; }
 .backups-bar select { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 6px 10px; }
