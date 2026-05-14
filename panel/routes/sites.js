@@ -108,17 +108,18 @@ function writeSiteMeta(siteDir, meta) {
 }
 
 function getWpDynamicInfo(siteDir) {
-  try {
-    const themeRaw = execSync(`wp theme list --path=${siteDir} --status=active --field=name --allow-root`, { encoding: 'utf8' }).trim()
-    const pluginsRaw = execSync(`wp plugin list --path=${siteDir} --status=active --field=name --allow-root`, { encoding: 'utf8' }).trim()
-    const usersRaw = execSync(`wp user list --path=${siteDir} --field=user_login --allow-root`, { encoding: 'utf8' }).trim()
-    return {
-      currentTheme: themeRaw || null,
-      activePlugins: pluginsRaw ? pluginsRaw.split('\n').filter(Boolean) : [],
-      users: usersRaw ? usersRaw.split('\n').filter(Boolean) : []
-    }
-  } catch {
-    return { currentTheme: null, activePlugins: [], users: [] }
+  // Run each WP-CLI command independently so one failure doesn't wipe all results.
+  // shell:true allows 2>/dev/null to suppress PHP deprecation notices from subprocesses.
+  const run = (cmd) => {
+    try { return execSync(cmd, { encoding: 'utf8', shell: true }).trim() } catch { return '' }
+  }
+  // Valid slugs only — filters out any leaked PHP notice lines
+  const slugLines = (raw) => raw.split('\n').filter(l => /^[a-z0-9][a-z0-9._-]*$/.test(l.trim()))
+
+  return {
+    currentTheme: slugLines(run(`wp theme list --path=${siteDir} --status=active --field=name --allow-root 2>/dev/null`))[0] || null,
+    activePlugins: slugLines(run(`wp plugin list --path=${siteDir} --status=active --field=name --allow-root 2>/dev/null`)),
+    users: slugLines(run(`wp user list --path=${siteDir} --field=user_login --allow-root 2>/dev/null`)),
   }
 }
 

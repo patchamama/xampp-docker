@@ -235,9 +235,25 @@ async function showSiteInfo(siteName, btn = null) {
   }
 }
 
+function infoRow(label, value, copyable = false) {
+  if (!value && value !== 0) return ''
+  const id = `ir-${Math.random().toString(36).slice(2)}`
+  const copy = copyable
+    ? `<button class="info-copy-btn" onclick="navigator.clipboard.writeText('${String(value).replace(/'/g, "\\'")}')">⎘</button>`
+    : ''
+  return `<div class="info-row"><span class="info-label">${label}</span><span class="info-value" id="${id}">${value}</span>${copy}</div>`
+}
+
 function openSiteInfoModal(siteName, text, info) {
   const old = document.getElementById('site-info-modal')
   if (old) old.remove()
+
+  const plugins = (info.activePlugins || [])
+  const pluginBadges = plugins.length
+    ? plugins.map(p => `<span class="info-badge">${p}</span>`).join('')
+    : '<span style="color:var(--muted)">—</span>'
+
+  const isWP = info.cms === 'WordPress'
 
   const modal = document.createElement('div')
   modal.id = 'site-info-modal'
@@ -245,16 +261,50 @@ function openSiteInfoModal(siteName, text, info) {
     <div class="site-info-box">
       <div class="site-info-header">
         <strong>${siteName}</strong>
-        <button onclick="document.getElementById('site-info-modal').remove()">✕</button>
+        <span class="info-cms-tag">${info.cms || ''}</span>
+        <button class="info-close-btn" onclick="document.getElementById('site-info-modal').remove()">✕</button>
       </div>
-      <textarea id="site-info-text" readonly>${text}</textarea>
+      <div class="site-info-scroll">
+        <div class="info-section">
+          <div class="info-section-title">URLs</div>
+          ${infoRow('Frontend', `<a href="${info.urls?.frontend}" target="_blank">${info.urls?.frontend}</a>`)}
+          ${infoRow('Admin', `<a href="${info.urls?.admin}" target="_blank">${info.urls?.admin}</a>`)}
+          ${infoRow('phpMyAdmin', `<a href="${info.urls?.phpmyadmin}" target="_blank">Abrir phpMyAdmin</a>`)}
+        </div>
+        <div class="info-section">
+          <div class="info-section-title">Base de datos</div>
+          ${infoRow('Nombre', info.db?.name, true)}
+          ${infoRow('Host', info.db?.host)}
+          ${infoRow('Usuario', info.db?.user, true)}
+          ${infoRow('Contraseña', info.db?.password !== undefined ? (info.db.password || '(vacía)') : '', true)}
+        </div>
+        ${info.admin?.username ? `
+        <div class="info-section">
+          <div class="info-section-title">Admin</div>
+          ${infoRow('Usuario', info.admin.username, true)}
+          ${infoRow('Contraseña', info.admin.password || '', true)}
+          ${infoRow('Email', info.admin.email || '')}
+        </div>` : ''}
+        ${isWP ? `
+        <div class="info-section">
+          <div class="info-section-title">WordPress</div>
+          ${infoRow('Tema activo', info.currentTheme)}
+          <div class="info-row info-row-wrap">
+            <span class="info-label">Plugins activos</span>
+            <span class="info-badges">${pluginBadges}</span>
+          </div>
+        </div>` : ''}
+      </div>
       <div class="site-info-actions">
-        <button onclick="copySiteInfo()">${t('copy') || 'Copiar'}</button>
+        <button onclick="copySiteInfo()">${t('copy') || 'Copiar todo'}</button>
+        ${isWP ? `
         <button onclick="openUserAction('${siteName}','change_password')">${t('site_change_pass') || 'Cambiar contraseña'}</button>
-        <button onclick="openUserAction('${siteName}','add_user')">${t('site_add_user') || 'Agregar usuario'}</button>
+        <button onclick="openUserAction('${siteName}','add_user')">${t('site_add_user') || 'Agregar usuario'}</button>` : ''}
       </div>
       <div id="site-user-action"></div>
     </div>`
+
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove() })
   document.body.appendChild(modal)
 }
 
@@ -555,12 +605,45 @@ async function loadInstallVersions() {
 
 let terminalSessionId = null
 let terminalSource = null
+let xtermInstance = null
+let xtermFit = null
+
+function initXterm() {
+  if (xtermInstance) return
+  const container = document.getElementById('terminal-xterm')
+  if (!container || typeof Terminal === 'undefined') return
+  xtermInstance = new Terminal({
+    cursorBlink: true,
+    fontSize: 13,
+    fontFamily: "'Fira Code', 'Cascadia Code', monospace",
+    theme: {
+      background: '#0d0d0d',
+      foreground: '#e0e0e0',
+      cursor: '#f97316',
+      selectionBackground: 'rgba(249,115,22,0.3)',
+    },
+    scrollback: 2000,
+  })
+  xtermFit = new FitAddon.FitAddon()
+  xtermInstance.loadAddon(xtermFit)
+  xtermInstance.open(container)
+  xtermFit.fit()
+  xtermInstance.onData((data) => {
+    if (!terminalSessionId) return
+    fetch(`/api/terminal/input/${terminalSessionId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data }),
+    }).catch(() => {})
+  })
+  window.addEventListener('resize', () => { if (xtermFit) xtermFit.fit() })
+}
 
 async function startTerminalSession(btn = null) {
   const cwd = document.getElementById('term-cwd').value.trim() || '/'
-  const out = document.getElementById('terminal-output')
   if (terminalSessionId) await stopTerminalSession()
   setButtonLoading(btn, true)
+  initXterm()
   try {
     const res = await fetch('/api/terminal/start', {
       method: 'POST',
@@ -570,38 +653,18 @@ async function startTerminalSession(btn = null) {
     const data = await res.json()
     if (!res.ok) throw new Error(data.error || 'Terminal start failed')
     terminalSessionId = data.session_id
-    out.textContent += `\n[terminal connected at ${cwd}]\n`
     terminalSource = new EventSource(`/api/terminal/stream/${terminalSessionId}`)
     terminalSource.onmessage = (e) => {
       try {
         const payload = JSON.parse(e.data)
-        if (payload.output) out.textContent += payload.output
+        if (payload.output && xtermInstance) xtermInstance.write(payload.output)
       } catch {}
-      out.scrollTop = out.scrollHeight
     }
   } catch (err) {
-    out.textContent += `Error: ${err.message}\n`
+    if (xtermInstance) xtermInstance.writeln(`\r\nError: ${err.message}`)
   } finally {
     setButtonLoading(btn, false)
-  }
-}
-
-async function sendTerminalLine() {
-  if (!terminalSessionId) return alert('Conecta la terminal primero.')
-  const input = document.getElementById('term-cmd')
-  const out = document.getElementById('terminal-output')
-  const line = input.value
-  if (!line.trim()) return
-  out.textContent += `$ ${line}\n`
-  input.value = ''
-  try {
-    await fetch(`/api/terminal/input/${terminalSessionId}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ data: line + '\n' }),
-    })
-  } catch (err) {
-    out.textContent += `Error: ${err.message}\n`
+    setTimeout(() => { if (xtermFit) xtermFit.fit() }, 50)
   }
 }
 
@@ -615,19 +678,14 @@ async function sendTerminalCtrlC() {
 }
 
 async function stopTerminalSession() {
-  if (terminalSource) {
-    terminalSource.close()
-    terminalSource = null
-  }
+  if (terminalSource) { terminalSource.close(); terminalSource = null }
   if (!terminalSessionId) return
   const id = terminalSessionId
   terminalSessionId = null
   await fetch(`/api/terminal/stop/${id}`, { method: 'POST' }).catch(() => {})
+  if (xtermInstance) xtermInstance.writeln('\r\n[disconnected]')
 }
 
-function clearTerminalOutput() {
-  document.getElementById('terminal-output').textContent = ''
-}
 
 // Logs
 let logsSource = null

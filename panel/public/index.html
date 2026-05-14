@@ -7,6 +7,10 @@
   <link rel="stylesheet" href="/css/style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- xterm.js -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
   <!-- CodeMirror 5 -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
@@ -268,16 +272,11 @@
     <div class="terminal-bar">
       <label for="term-cwd" data-i18n="terminal_cwd">Carpeta</label>
       <input id="term-cwd" type="text" value="/" placeholder="/wp-test">
-      <button class="primary" onclick="startTerminalSession(this)" data-i18n="terminal_connect">Conectar</button>
+      <button class="primary" id="term-connect-btn" onclick="startTerminalSession(this)" data-i18n="terminal_connect">Conectar</button>
       <button onclick="stopTerminalSession()" data-i18n="terminal_disconnect">Desconectar</button>
       <button onclick="sendTerminalCtrlC()" data-i18n="terminal_ctrlc">Ctrl+C</button>
-      <button onclick="clearTerminalOutput()" data-i18n="terminal_clear">Limpiar</button>
     </div>
-    <div class="terminal-bar">
-      <input id="term-cmd" type="text" placeholder="Escribe comando y Enter" onkeydown="if(event.key==='Enter') sendTerminalLine()">
-      <button class="primary" onclick="sendTerminalLine()" data-i18n="terminal_run">Ejecutar</button>
-    </div>
-    <pre id="terminal-output"></pre>
+    <div id="terminal-xterm"></div>
   </section>
 
   <!-- Languages -->
