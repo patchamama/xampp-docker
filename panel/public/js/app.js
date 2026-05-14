@@ -1111,6 +1111,8 @@ async function browseDir(dirPath) {
 
       if (e.type === 'dir') {
         row.onclick = () => browseDir(dirPath + '/' + e.name)
+      } else if (/\.(zip|tar\.gz|tgz|tar)$/i.test(e.name)) {
+        row.onclick = () => openBrowserArchive(filePath, e.name)
       } else if (e.image) {
         row.onclick = () => openBrowserImage(filePath)
       } else if (e.editable) {
@@ -1650,6 +1652,49 @@ function onBrowserDrop(e) {
   e.preventDefault()
   document.getElementById('browser-dropzone').classList.remove('active')
   uploadFiles(e.dataTransfer.files)
+}
+
+async function openBrowserArchive(filePath, archiveName) {
+  const list = document.getElementById('browser-list')
+  const bc   = document.getElementById('browser-breadcrumb')
+  list.innerHTML = '<div style="padding:12px;opacity:.6">Cargando contenido del archivo…</div>'
+
+  // Breadcrumb: show current path + archive name (non-clickable)
+  renderBreadcrumb(browserCurrentPath)
+  if (bc) {
+    bc.innerHTML += ` <span style="opacity:.5">/</span> <span class="breadcrumb-part current">📦 ${archiveName}</span>`
+  }
+
+  try {
+    const res  = await fetch(`/api/browser/archive?path=${encodeURIComponent(filePath)}`)
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Archive read failed')
+
+    list.innerHTML = ''
+
+    // Back row — returns to real directory
+    const back = document.createElement('div')
+    back.className = 'browser-entry browser-dir'
+    back.innerHTML = `<span class="browser-entry-icon">📁</span><span class="browser-entry-name">..</span><span class="browser-entry-size"></span><span class="browser-entry-actions"></span>`
+    back.onclick = () => browseDir(browserCurrentPath)
+    list.appendChild(back)
+
+    if (!data.entries.length) {
+      list.innerHTML += '<div style="padding:12px;opacity:.6">Archivo vacío.</div>'
+      return
+    }
+
+    data.entries.forEach(e => {
+      const row  = document.createElement('div')
+      const icon = e.isDir ? '📁' : '📄'
+      const size = e.size != null ? fmtSize(e.size) : ''
+      row.className = `browser-entry ${e.isDir ? 'browser-dir' : 'browser-file'}`
+      row.innerHTML = `<span class="browser-entry-icon">${icon}</span><span class="browser-entry-name" title="${e.name}">${e.name}</span><span class="browser-entry-size">${size}</span><span class="browser-entry-actions"></span>`
+      list.appendChild(row)
+    })
+  } catch (err) {
+    list.innerHTML = `<div style="padding:12px;color:var(--red)">${err.message}</div>`
+  }
 }
 
 async function extractBrowserFile(filePath) {

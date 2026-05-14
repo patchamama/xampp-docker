@@ -210,6 +210,44 @@ router.get('/image', (req, res) => {
   }
 })
 
+// GET /api/browser/archive?path=/foo/bar.zip — list contents of a zip/tar archive
+router.get('/archive', (req, res) => {
+  const rel = (req.query.path || '').replace(/\.\./g, '')
+  let abs
+  try { abs = safePath(rel) } catch { return res.status(403).json({ error: 'Access denied' }) }
+  if (!fs.existsSync(abs)) return res.status(404).json({ error: 'File not found' })
+
+  const name = path.basename(abs).toLowerCase()
+  try {
+    let entries = []
+    if (name.endsWith('.zip')) {
+      const zip = new AdmZip(abs)
+      entries = zip.getEntries().map(e => ({
+        name: e.entryName,
+        size: e.header.size,
+        isDir: e.isDirectory,
+        compressed: e.header.compressedSize,
+      }))
+    } else if (name.endsWith('.tar.gz') || name.endsWith('.tgz') || name.endsWith('.tar')) {
+      // tar.list is async — use sync parse via child_process
+      const { execSync } = require('child_process')
+      const flag = name.endsWith('.tar') ? '' : 'z'
+      const raw = execSync(`tar -t${flag}f "${abs}"`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] })
+      entries = raw.trim().split('\n').filter(Boolean).map(line => ({
+        name: line,
+        size: null,
+        isDir: line.endsWith('/'),
+        compressed: null,
+      }))
+    } else {
+      return res.status(400).json({ error: 'Unsupported archive format' })
+    }
+    res.json({ archive: path.basename(abs), entries })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // POST /api/browser/upload?path=/dir — upload multiple files into directory
 const storage = multer.diskStorage({
   destination: (req, _file, cb) => {

@@ -373,14 +373,16 @@ router.post('/', async (req, res) => {
       }
 
       case 'drupal':
-        // drush is installed in the panel container, not in xampp-php
-        execSync(`drush --root=${targetDir} site:install standard \
+        // Install drush into the project via composer (runs in xampp-php which has PHP 8.4)
+        sendEvent(res, { step: 'install', message: 'Installing drush into project...' })
+        await execInPhpContainer(`cd ${phpTargetDir} && composer require drush/drush --no-interaction 2>&1`)
+        await execInPhpContainer(`cd ${phpTargetDir} && vendor/bin/drush site:install standard \
           --db-url=mysql://root:@${MYSQL_HOST}/${dbName} \
           --site-name="${title}" \
           --account-name=${adminUser} \
           --account-pass=${adminPass} \
           --account-mail=${adminEmail} \
-          --yes`, { stdio: 'pipe' })
+          --yes`)
         break
     }
 
