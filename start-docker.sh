@@ -555,6 +555,33 @@ rebuild_from_scratch() {
   echo ""
 }
 
+rebuild_panel() {
+  local script_dir="$1"
+
+  echo -e "${BOLD}Rebuilding control panel image...${NC}"
+  echo ""
+
+  cd "$script_dir"
+
+  if [[ -f "$script_dir/.env" ]]; then
+    set -a
+    # shellcheck disable=SC1090
+    source "$script_dir/.env"
+    set +a
+  fi
+
+  if ! compose_cmd build --no-cache control-panel; then
+    echo -e "${RED}✗ Panel rebuild failed.${NC}"
+    exit 1
+  fi
+
+  echo ""
+  compose_cmd up -d --no-deps control-panel
+  echo ""
+  echo -e "  ${GREEN}✓ Control panel rebuilt and restarted.${NC}"
+  echo ""
+}
+
 show_menu() {
   echo -e "${BOLD}  What do you want to do?${NC}"
   echo ""
@@ -562,6 +589,7 @@ show_menu() {
   echo "    [2] Restart containers"
   echo "    [3] Copy XAMPP data and then start"
   echo "    [4] Rebuild everything from scratch and then start"
+  echo "    [5] Rebuild control panel only"
   echo ""
   read -r -p "  Option [1]: " menu_choice
   menu_choice=${menu_choice:-1}
@@ -603,6 +631,11 @@ case "$menu_choice" in
     copy_xampp_data "$SCRIPT_DIR"
     check_docker_file_sharing
     start_stack
+    wait_for_services
+    print_access_info
+    ;;
+  5)
+    rebuild_panel "$SCRIPT_DIR"
     wait_for_services
     print_access_info
     ;;
