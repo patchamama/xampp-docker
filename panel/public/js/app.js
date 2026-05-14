@@ -485,6 +485,10 @@ async function installCMS(btn = null) {
   if ((cms === 'joomla' || cms === 'drupal') && body.adminPass.length < 12) {
     return alert(`${body.cms} requires a password of at least 12 characters.`)
   }
+  if (cms === 'mediawiki') {
+    if (body.adminPass.length < 10) return alert('MediaWiki requires a password of at least 10 characters.')
+    if (body.adminPass.toLowerCase().includes(body.adminUser.toLowerCase())) return alert('MediaWiki password must not contain the username.')
+  }
 
   const log = document.getElementById('install-log')
   const installBtn = btn || document.getElementById('install-btn')
