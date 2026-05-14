@@ -82,7 +82,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ${CONFIG_PATH:-~/xampp-data/config}:/app/config
-      - ${HTDOCS_PATH:-~/xampp-data/htdocs}:/htdocs:ro
+      - ${HTDOCS_PATH:-~/xampp-data/htdocs}:/htdocs
     environment:
       PANEL_PORT: 8080
       MYSQL_HOST: mariadb

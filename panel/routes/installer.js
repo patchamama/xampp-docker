@@ -77,7 +77,7 @@ router.post('/', async (req, res) => {
   res.setHeader('Connection', 'keep-alive')
   res.flushHeaders()
 
-  const { cms, dir, title, adminUser, adminPass, adminEmail } = req.body || {}
+  const { cms, dir, title, adminUser, adminPass, adminEmail, overwrite } = req.body || {}
 
   if (!cms || !dir || !title || !adminUser || !adminPass || !adminEmail) {
     sendEvent(res, { error: 'Missing required fields' })
@@ -90,8 +90,12 @@ router.post('/', async (req, res) => {
   try {
     // 1. Check dir doesn't exist
     if (fs.existsSync(targetDir)) {
-      sendEvent(res, { error: `Directory ${dir} already exists in htdocs` })
-      return res.end()
+      if (!overwrite) {
+        sendEvent(res, { error: `Directory ${dir} already exists in htdocs`, code: 'DIR_EXISTS' })
+        return res.end()
+      }
+      sendEvent(res, { step: 'prepare', message: `Directory ${dir} exists. Overwriting...` })
+      fs.rmSync(targetDir, { recursive: true, force: true })
     }
 
     // 2. Fetch latest version info

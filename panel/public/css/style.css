@@ -14,6 +14,23 @@
   --muted: #64748b;
   --radius: 10px;
   --font: 'Inter', system-ui, sans-serif;
+  --code-bg: #0a0c14;
+  --code-fg: #a3e4a3;
+}
+
+body.light-theme {
+  --bg: #f3f4f6;
+  --surface: #ffffff;
+  --surface2: #f8fafc;
+  --border: #d1d5db;
+  --accent: #ea580c;
+  --accent2: #2563eb;
+  --green: #16a34a;
+  --red: #dc2626;
+  --text: #111827;
+  --muted: #6b7280;
+  --code-bg: #f8fafc;
+  --code-fg: #111827;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -376,6 +393,20 @@ textarea {
   font-size: 13px;
 }
 .form-group.full { grid-column: 1 / -1; }
+.checkbox-group { margin-top: -2px; }
+.checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+}
+.checkbox-label input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent);
+}
 
 .progress-log {
   margin-top: 20px;
@@ -401,7 +432,7 @@ textarea {
 .logs-bar { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; }
 
 #log-output {
-  background: #0a0c14;
+  background: var(--code-bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 16px;
@@ -410,9 +441,42 @@ textarea {
   line-height: 1.6;
   height: calc(100vh - 180px);
   overflow-y: auto;
-  color: #a3e4a3;
+  color: var(--code-fg);
   white-space: pre-wrap;
   word-break: break-all;
+}
+
+/* Terminal */
+.terminal-bar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.terminal-bar input {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 10px;
+  border-radius: 7px;
+  font-size: 13px;
+}
+#term-cwd { width: 180px; }
+#term-cmd { min-width: 300px; flex: 1; }
+#terminal-output {
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  font-family: monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  height: calc(100vh - 220px);
+  overflow-y: auto;
+  color: var(--code-fg);
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 /* Scrollbar */
@@ -499,12 +563,12 @@ textarea {
 .lang-output-body { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
 .lang-pre {
   flex: 1;
-  background: #0a0c14;
+  background: var(--code-bg);
   padding: 16px;
   font-family: monospace;
   font-size: 12px;
   line-height: 1.6;
-  color: #a3e4a3;
+  color: var(--code-fg);
   white-space: pre-wrap;
   word-break: break-all;
   margin: 0;

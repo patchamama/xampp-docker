@@ -10,6 +10,7 @@
   <!-- CodeMirror 5 -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/eclipse.min.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/php/php.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.js"></script>
@@ -54,6 +55,9 @@
     <a href="#" class="nav-link" data-section="browser">
       <span class="icon">📁</span><span class="nav-label" data-i18n="nav_browser">Archivos</span>
     </a>
+    <a href="#" class="nav-link" data-section="terminal">
+      <span class="icon">💻</span><span class="nav-label" data-i18n="nav_terminal">Terminal</span>
+    </a>
     <a href="#" class="nav-link" data-section="languages">
       <span class="icon">🔬</span><span class="nav-label" data-i18n="nav_languages">Lenguajes</span>
     </a>
@@ -62,9 +66,10 @@
     </a>
   </nav>
   <div class="lang-selector">
-    <button onclick="setLang('es')" id="lang-es">ES</button>
-    <button onclick="setLang('en')" id="lang-en">EN</button>
-    <button onclick="setLang('de')" id="lang-de">DE</button>
+    <button class="lang-btn" onclick="setLang('es')" id="lang-es">ES</button>
+    <button class="lang-btn" onclick="setLang('en')" id="lang-en">EN</button>
+    <button class="lang-btn" onclick="setLang('de')" id="lang-de">DE</button>
+    <button onclick="toggleTheme()" id="theme-toggle" title="Tema">🌙</button>
   </div>
 </nav>
 
@@ -180,6 +185,12 @@
         <label data-i18n="install_admin_email">Email admin</label>
         <input type="email" id="i-email" placeholder="admin@example.com">
       </div>
+      <div class="form-group full checkbox-group">
+        <label class="checkbox-label">
+          <input type="checkbox" id="i-overwrite">
+          <span data-i18n="install_overwrite">Sobrescribir si el directorio ya existe</span>
+        </label>
+      </div>
       <div class="form-group full">
         <button class="primary" onclick="installCMS()" id="install-btn" data-i18n="install_btn">Instalar</button>
       </div>
@@ -233,6 +244,19 @@
         <pre    id="browser-out-pre"   class="lang-pre" style="display:none;max-height:350px"></pre>
       </div>
     </div>
+  </section>
+
+  <!-- Terminal -->
+  <section id="section-terminal" class="section">
+    <h2 data-i18n="terminal_title">Terminal</h2>
+    <div class="terminal-bar">
+      <label for="term-cwd" data-i18n="terminal_cwd">Carpeta</label>
+      <input id="term-cwd" type="text" value="/" placeholder="/wp-test">
+      <input id="term-cmd" type="text" placeholder="ls -la" onkeydown="if(event.key==='Enter') runTerminalCommand()">
+      <button class="primary" onclick="runTerminalCommand()" data-i18n="terminal_run">Ejecutar</button>
+      <button onclick="clearTerminalOutput()" data-i18n="terminal_clear">Limpiar</button>
+    </div>
+    <pre id="terminal-output"></pre>
   </section>
 
   <!-- Languages -->

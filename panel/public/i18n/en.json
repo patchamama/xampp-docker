@@ -36,6 +36,7 @@
   "install_admin_user": "Admin username",
   "install_admin_pass": "Admin password",
   "install_admin_email": "Admin email",
+  "install_overwrite": "Overwrite if directory already exists",
   "install_btn": "Install",
   "install_done": "Installation complete!",
   "install_visit": "Visit site",
@@ -49,8 +50,13 @@
   "lang_python_desc": "Checks version, pip, standard modules and disk write.",
   "lang_node_desc": "Checks version, npm, pm2, nodemon, yarn and TypeScript.",
   "nav_browser": "Files",
+  "nav_terminal": "Terminal",
   "browser_title": "Files",
   "browser_save": "Save",
   "browser_run": "▶ Run",
-  "browser_open": "↗ Open"
+  "browser_open": "↗ Open",
+  "terminal_title": "Terminal",
+  "terminal_cwd": "Folder",
+  "terminal_run": "Run",
+  "terminal_clear": "Clear"
 }

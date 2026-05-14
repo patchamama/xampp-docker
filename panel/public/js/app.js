@@ -1,6 +1,9 @@
 // i18n
 let lang = localStorage.getItem('lang') || 'es'
 let i18n = {}
+let theme = localStorage.getItem('theme') || 'dark'
+let cmEditor = null
+let browserCmEditor = null
 
 async function loadLang(l) {
   const res = await fetch(`/i18n/${l}.json`)
@@ -24,9 +27,27 @@ function t(key) { return i18n[key] || key }
 function setLang(l) { loadLang(l) }
 
 function updateLangButtons() {
-  document.querySelectorAll('.lang-selector button').forEach(b => {
+  document.querySelectorAll('.lang-selector .lang-btn').forEach(b => {
     b.classList.toggle('active', b.id === `lang-${lang}`)
   })
+}
+
+function cmTheme() {
+  return theme === 'light' ? 'eclipse' : 'dracula'
+}
+
+function applyTheme() {
+  document.body.classList.toggle('light-theme', theme === 'light')
+  localStorage.setItem('theme', theme)
+  const btn = document.getElementById('theme-toggle')
+  if (btn) btn.textContent = theme === 'light' ? '🌞' : '🌙'
+  if (cmEditor) cmEditor.setOption('theme', cmTheme())
+  if (browserCmEditor) browserCmEditor.setOption('theme', cmTheme())
+}
+
+function toggleTheme() {
+  theme = theme === 'light' ? 'dark' : 'light'
+  applyTheme()
 }
 
 // Navigation
@@ -199,6 +220,7 @@ async function installCMS() {
     adminUser: document.getElementById('i-user').value.trim(),
     adminPass: document.getElementById('i-pass').value,
     adminEmail: document.getElementById('i-email').value.trim(),
+    overwrite: !!document.getElementById('i-overwrite')?.checked,
   }
 
   if (!body.dir || !body.title || !body.adminUser || !body.adminPass || !body.adminEmail) {
@@ -219,11 +241,12 @@ async function installCMS() {
     log.scrollTop = log.scrollHeight
   }
 
-  try {
+  const runInstallStream = async (payload) => {
+    let dirExists = false
     const res = await fetch('/api/install', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      body: JSON.stringify(payload),
     })
 
     const reader = res.body.getReader()
@@ -244,7 +267,11 @@ async function installCMS() {
         try {
           const ev = JSON.parse(raw)
           if (ev.error) {
-            addLine('err', `✗ ${ev.error}`)
+            if (ev.code === 'DIR_EXISTS') {
+              dirExists = true
+            } else {
+              addLine('err', `✗ ${ev.error}`)
+            }
           } else if (ev.step === 'done') {
             addLine('done', `✓ ${t('install_done')}`)
             addLine('done', `→ ${ev.url}`)
@@ -260,11 +287,57 @@ async function installCMS() {
         } catch {}
       }
     }
+    return { dirExists }
+  }
+
+  try {
+    const first = await runInstallStream(body)
+    if (first.dirExists) {
+      if (body.overwrite) {
+        addLine('step', '[prepare] Sobrescribiendo directorio existente...')
+        await runInstallStream(body)
+        return
+      }
+      const ok = confirm(`El directorio "${body.dir}" ya existe. ¿Deseas sobreescribirlo?`)
+      if (ok) {
+        addLine('step', '[prepare] Sobrescribiendo directorio existente...')
+        body.overwrite = true
+        await runInstallStream(body)
+      } else {
+        addLine('err', `✗ Directory ${body.dir} already exists in htdocs`)
+      }
+    }
   } catch (err) {
     addLine('err', `✗ ${err.message}`)
   }
 
   btn.disabled = false
+}
+
+async function runTerminalCommand() {
+  const command = document.getElementById('term-cmd').value.trim()
+  const cwd = document.getElementById('term-cwd').value.trim() || '/'
+  const out = document.getElementById('terminal-output')
+  if (!command) return
+  out.textContent += `\n$ (${cwd}) ${command}\n`
+  try {
+    const res = await fetch('/api/terminal/exec', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ command, cwd }),
+    })
+    const data = await res.json()
+    if (data.stdout) out.textContent += data.stdout
+    if (data.stderr) out.textContent += data.stderr
+    out.textContent += `\n[exit ${data.code}]\n`
+  } catch (err) {
+    out.textContent += `Error: ${err.message}\n`
+  }
+  out.scrollTop = out.scrollHeight
+}
+
+function clearTerminalOutput() {
+  document.getElementById('terminal-output').textContent = ''
 }
 
 // Logs
@@ -303,6 +376,7 @@ function toggleSidebar() {
 
 // Restore state on load
 ;(function () {
+  applyTheme()
   if (localStorage.getItem('sidebar-collapsed') === '1') {
     document.getElementById('sidebar').classList.add('collapsed')
     document.body.classList.add('sidebar-collapsed')
@@ -456,7 +530,6 @@ console.log(\`  \${results.filter(r=>r.ok).length}/\${results.length} checks OK\
 }
 
 let currentLang = 'php'
-let cmEditor = null
 
 const CM_MODES = {
   php:    'application/x-httpd-php',
@@ -469,7 +542,7 @@ function initCodeMirror() {
   cmEditor = CodeMirror(document.getElementById('lang-cm-editor'), {
     value: LANG_SNIPPETS.php,
     mode: CM_MODES.php,
-    theme: 'dracula',
+    theme: cmTheme(),
     lineNumbers: true,
     indentUnit: 2,
     tabSize: 2,
@@ -559,7 +632,7 @@ async function runLangEditor() {
 // ── Browser ────────────────────────────────────────────────────────────────
 
 let browserCurrentPath = '/'
-let browserCmEditor    = null
+ 
 let browserCurrentFile = null
 let browserRunHow      = null
 let browserRunLang     = null
@@ -711,7 +784,7 @@ function initBrowserCm(content, ext) {
   browserCmEditor = CodeMirror(container, {
     value: content,
     mode,
-    theme: 'dracula',
+    theme: cmTheme(),
     lineNumbers: true,
     indentUnit: 2,
     tabSize: 2,

@@ -9,6 +9,7 @@ const phpinfoRouter = require('./routes/phpinfo')
 const logsRouter = require('./routes/logs')
 const languagesRouter = require('./routes/languages')
 const browserRouter   = require('./routes/browser')
+const terminalRouter  = require('./routes/terminal')
 
 const app = express()
 const PORT = process.env.PANEL_PORT || 8080
@@ -24,6 +25,7 @@ app.use('/api/phpinfo', phpinfoRouter)
 app.use('/api/logs', logsRouter)
 app.use('/api/languages', languagesRouter)
 app.use('/api/browser',   browserRouter)
+app.use('/api/terminal',  terminalRouter)
 
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'))
