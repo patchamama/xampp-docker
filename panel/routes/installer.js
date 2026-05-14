@@ -96,15 +96,30 @@ function fetchText(url) {
   })
 }
 
-async function getVersions(cms) {
-  const getPhpCliVersion = () => {
-    try {
-      return execSync(`php -r "echo PHP_VERSION;"`, { encoding: 'utf8' }).trim()
-    } catch {
-      return '0.0.0'
-    }
+async function getPhpContainerVersion() {
+  try {
+    const container = docker.getContainer(PHP_CONTAINER)
+    const execObj = await container.exec({
+      Cmd: ['php', '-r', 'echo PHP_VERSION;'],
+      AttachStdout: true,
+      AttachStderr: true,
+    })
+    const stream = await execObj.start({ hijack: true, stdin: false })
+    let out = ''
+    await new Promise((resolve, reject) => {
+      container.modem.demuxStream(stream, { write: c => { out += c.toString('utf8') } }, { write: () => {} })
+      stream.on('end', resolve)
+      stream.on('error', reject)
+    })
+    const version = out.trim()
+    return version.match(/^\d+\.\d+\.\d+$/) ? version : '0.0.0'
+  } catch {
+    return '0.0.0'
   }
-  const phpCliVersion = getPhpCliVersion()
+}
+
+async function getVersions(cms) {
+  const phpVersion = await getPhpContainerVersion()
 
   switch (cms) {
     case 'wordpress': {
@@ -118,21 +133,21 @@ async function getVersions(cms) {
     }
     case 'joomla': {
       const releases = await fetchJSON('https://api.github.com/repos/joomla/joomla-cms/releases?per_page=30')
-      const supportsJoomla6 = versionCompare(phpCliVersion, '8.3.0') >= 0
-      return (Array.isArray(releases) ? releases : [])
+      const supportsJoomla6 = versionCompare(phpVersion, '8.3.0') >= 0
+      const filtered = (Array.isArray(releases) ? releases : [])
         .filter(r => !r.prerelease && !r.draft)
-        .map((r, i) => {
+        .reduce((acc, r) => {
           const version = String(r.tag_name).replace(/^v/i, '')
           const major = parseInt(version.split('.')[0] || '0', 10)
-          if (major >= 6 && !supportsJoomla6) return null
+          if (major >= 6 && !supportsJoomla6) return acc
           const asset = (r.assets || []).find(a => a?.name?.endsWith('.zip') && !a.name.includes('update'))
-          return asset ? {
-            version,
-            url: asset.browser_download_url,
-            channel: i === 0 ? 'stable' : 'legacy'
-          } : null
-        })
-        .filter(Boolean)
+          if (asset) acc.push({ version, url: asset.browser_download_url })
+          return acc
+        }, [])
+      return filtered.map((v, i) => ({
+        ...v,
+        channel: i === 0 ? 'stable' : 'legacy'
+      }))
     }
     case 'mediawiki': {
       const html = await fetchText('https://www.mediawiki.org/wiki/Download/en')
@@ -146,30 +161,35 @@ async function getVersions(cms) {
         seen.add(v)
         versions.push({ majorMinor, version: v })
       }
-      return versions.slice(0, 10).map((entry, i) => {
-        const v = entry.version
-        return {
-          version: v,
-          url: `https://releases.wikimedia.org/mediawiki/${entry.majorMinor}/mediawiki-${v}.tar.gz`,
-          channel: i === 0 ? 'stable' : (i === 2 ? 'lts' : 'legacy')
-        }
-      })
+      return versions.slice(0, 10).map((entry, i) => ({
+        version: entry.version,
+        url: `https://releases.wikimedia.org/mediawiki/${entry.majorMinor}/mediawiki-${entry.version}.tar.gz`,
+        channel: i === 0 ? 'stable' : (i === 2 ? 'lts' : 'legacy')
+      }))
     }
     case 'drupal': {
-      const releases = await fetchJSON('https://api.github.com/repos/drupal/drupal/releases?per_page=30')
-      return (Array.isArray(releases) ? releases : [])
-        .filter(r => !r.prerelease && !r.draft)
-        .map((r, i) => {
-          const asset = (r.assets || []).find(a => a?.name?.endsWith('.tar.gz') || a?.name?.endsWith('.zip'))
-          const version = String(r.tag_name || '').replace(/^v/i, '')
-          if (!version) return null
-          return {
-            version,
-            url: asset?.browser_download_url || `https://github.com/drupal/drupal/archive/refs/tags/${version}.tar.gz`,
-            channel: i === 0 ? 'stable' : 'legacy'
-          }
-        })
-        .filter(Boolean)
+      // Official Drupal release feed — has real download URLs unlike GitHub releases
+      const xml = await fetchText('https://updates.drupal.org/release-history/drupal/current')
+      const supportsDrupal11 = versionCompare(phpVersion, '8.3.0') >= 0
+      const supportsDrupal10 = versionCompare(phpVersion, '8.1.0') >= 0
+      const releaseBlocks = [...xml.matchAll(/<release>([\s\S]*?)<\/release>/g)]
+      const filtered = []
+      for (const block of releaseBlocks) {
+        const content = block[1]
+        const version = (content.match(/<version>([^<]+)<\/version>/) || [])[1]
+        const url = (content.match(/<download_link>([^<]+\.tar\.gz)<\/download_link>/) || [])[1]
+        const status = (content.match(/<status>([^<]+)<\/status>/) || [])[1]
+        if (!version || !url || status !== 'published') continue
+        const major = parseInt(version.split('.')[0] || '0', 10)
+        if (major >= 11 && !supportsDrupal11) continue
+        if (major >= 10 && !supportsDrupal10) continue
+        filtered.push({ version, url })
+        if (filtered.length >= 10) break
+      }
+      return filtered.map((v, i) => ({
+        ...v,
+        channel: i === 0 ? 'stable' : 'legacy'
+      }))
     }
     default:
       return []
