@@ -80,5 +80,18 @@
   "terminal_clear": "Clear",
   "copy": "Copy",
   "site_change_pass": "Change password",
-  "site_add_user": "Add user"
+  "site_add_user": "Add user",
+  "nav_backups": "Backups",
+  "backups_title": "Backups",
+  "backups_all": "All sites",
+  "backups_refresh": "Refresh",
+  "backups_empty": "No backups yet.",
+  "backups_site": "Site",
+  "backups_date": "Date",
+  "backups_size": "Size",
+  "backups_actions": "Actions",
+  "backups_download": "Download",
+  "backups_restore": "Restore",
+  "backups_delete": "Delete",
+  "sites_backup": "Backup"
 }

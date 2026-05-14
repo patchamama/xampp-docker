@@ -80,5 +80,18 @@
   "terminal_clear": "Leeren",
   "copy": "Kopieren",
   "site_change_pass": "Passwort ändern",
-  "site_add_user": "Benutzer hinzufügen"
+  "site_add_user": "Benutzer hinzufügen",
+  "nav_backups": "Backups",
+  "backups_title": "Backups",
+  "backups_all": "Alle Seiten",
+  "backups_refresh": "Aktualisieren",
+  "backups_empty": "Noch keine Backups.",
+  "backups_site": "Seite",
+  "backups_date": "Datum",
+  "backups_size": "Größe",
+  "backups_actions": "Aktionen",
+  "backups_download": "Herunterladen",
+  "backups_restore": "Wiederherstellen",
+  "backups_delete": "Löschen",
+  "sites_backup": "Backup"
 }

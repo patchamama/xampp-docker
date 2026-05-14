@@ -1112,3 +1112,13 @@ textarea {
 }
 #rename-input:focus { outline: none; border-color: var(--accent2); }
 .rename-actions { display: flex; gap: 8px; justify-content: flex-end; }
+
+/* Backups */
+.backups-bar { display: flex; gap: 10px; align-items: center; margin-bottom: 16px; }
+.backups-bar select { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 6px 10px; }
+.backups-table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+.backups-table th { text-align: left; padding: 8px 12px; border-bottom: 2px solid var(--border); color: var(--muted); font-weight: 600; }
+.backups-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+.backups-table tr:hover td { background: var(--surface2); }
+.backups-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.backups-actions button { font-size: .8rem; padding: 4px 10px; border-radius: 5px; }

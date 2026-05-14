@@ -61,6 +61,7 @@ document.querySelectorAll('.nav-link').forEach(link => {
     document.getElementById(`section-${section}`)?.classList.add('active')
     if (section === 'services')  loadServices()
     if (section === 'sites')     loadSites()
+    if (section === 'backups')   loadBackups()
     if (section === 'phpinfo')   loadPhpInfo()
     if (section === 'config')    loadPhpRuntimeOptions()
     if (section === 'languages') {
@@ -125,7 +126,8 @@ function actionIcon(kind) {
     files: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5.75A2.75 2.75 0 0 1 5.75 3h4.19a2 2 0 0 1 1.41.59l1.06 1.06a.5.5 0 0 0 .35.15h5.49A2.75 2.75 0 0 1 21 7.55v10.7A2.75 2.75 0 0 1 18.25 21H5.75A2.75 2.75 0 0 1 3 18.25V5.75Z"/></svg>`,
     admin: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 3 7v6c0 5.05 3.4 9.78 9 11 5.6-1.22 9-5.95 9-11V7l-9-5Zm0 6a3 3 0 1 1 0 6 3 3 0 0 1 0-6Zm0 11c-2.2 0-4.15-.9-5.5-2.35.03-1.83 3.67-2.84 5.5-2.84 1.82 0 5.47 1 5.5 2.84C16.14 18.1 14.2 19 12 19Z"/></svg>`,
     db: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3C7.03 3 3 4.79 3 7v10c0 2.21 4.03 4 9 4s9-1.79 9-4V7c0-2.21-4.03-4-9-4Zm0 2c4.42 0 7 .99 7 2s-2.58 2-7 2-7-.99-7-2 2.58-2 7-2Zm0 14c-4.42 0-7-.99-7-2v-2.2c1.63 1.01 4.33 1.7 7 1.7s5.37-.69 7-1.7V17c0 1.01-2.58 2-7 2Zm0-5c-4.42 0-7-.99-7-2v-2.2c1.63 1.01 4.33 1.7 7 1.7s5.37-.69 7-1.7V12c0 1.01-2.58 2-7 2Z"/></svg>`,
-    delete: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6a1 1 0 0 1 1 1v1h4a1 1 0 1 1 0 2h-1l-1 13a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 7H4a1 1 0 1 1 0-2h4V4a1 1 0 0 1 1-1Zm1 2v0h4V5h-4Zm-1 5a1 1 0 0 1 1 1v7a1 1 0 1 1-2 0v-7a1 1 0 0 1 1-1Zm6 0a1 1 0 0 1 1 1v7a1 1 0 1 1-2 0v-7a1 1 0 0 1 1-1Z"/></svg>`
+    delete: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6a1 1 0 0 1 1 1v1h4a1 1 0 1 1 0 2h-1l-1 13a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 7H4a1 1 0 1 1 0-2h4V4a1 1 0 0 1 1-1Zm1 2v0h4V5h-4Zm-1 5a1 1 0 0 1 1 1v7a1 1 0 1 1-2 0v-7a1 1 0 0 1 1-1Zm6 0a1 1 0 0 1 1 1v7a1 1 0 1 1-2 0v-7a1 1 0 0 1 1-1Z"/></svg>`,
+    backup: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2Zm-7 13-4-4h2.5V9h3v3H16l-4 4Z"/></svg>`
   }
   return icons[kind] || ''
 }
@@ -167,6 +169,7 @@ async function loadSites() {
             <button class="site-icon-btn" title="${t('browser_title') || 'Archivos'}" onclick="browseDir('/${s.name}')">${actionIcon('files')} Files</button>
             <button class="site-icon-btn" title="${t('sites_admin') || 'Admin'}" onclick="window.open('${s.adminUrl}','_blank')">${actionIcon('admin')} Admin</button>
             <button class="site-icon-btn" title="${t('sites_db') || 'Database'}" onclick="window.open('${s.phpmyadminUrl}','_blank')">${actionIcon('db')} DB</button>
+            <button class="site-icon-btn" title="${t('sites_backup') || 'Backup'}" onclick="createSiteBackup('${s.name}', this)">${actionIcon('backup')} Backup</button>
             <button class="site-icon-btn danger" title="${t('sites_delete') || 'Eliminar'}" onclick="deleteSite('${s.name}', this)">${actionIcon('delete')}</button>
           </div>
         </div>
@@ -1487,4 +1490,120 @@ function closeBrowserOutput() {
   frame.style.display = 'none'
   pre.textContent     = ''
   frame.src           = 'about:blank'
+}
+
+// ── Backups ────────────────────────────────────────────────────────────────
+
+function fmtBytes(b) {
+  if (b < 1024) return b + ' B'
+  if (b < 1024 * 1024) return (b / 1024).toFixed(1) + ' KB'
+  return (b / 1024 / 1024).toFixed(1) + ' MB'
+}
+
+function fmtDate(iso) {
+  if (!iso) return '—'
+  try { return new Date(iso).toLocaleString() } catch { return iso }
+}
+
+async function loadBackups() {
+  const filter = document.getElementById('backups-filter')?.value || ''
+  const list = document.getElementById('backups-list')
+  list.innerHTML = '<p style="color:var(--muted);padding:8px 0">Cargando…</p>'
+
+  try {
+    const url = filter ? `/api/backups/${encodeURIComponent(filter)}` : '/api/backups'
+    const res = await fetch(url)
+    const backups = await res.json()
+
+    // Populate filter select with known sites
+    const filterEl = document.getElementById('backups-filter')
+    if (filterEl && filterEl.options.length <= 1) {
+      const allSites = [...new Set(backups.map(b => b.site))].sort()
+      allSites.forEach(s => {
+        const o = document.createElement('option')
+        o.value = s; o.textContent = s
+        filterEl.appendChild(o)
+      })
+    }
+
+    if (!backups.length) {
+      list.innerHTML = `<p style="color:var(--muted)">${t('backups_empty') || 'No hay backups todavía.'}</p>`
+      return
+    }
+
+    list.innerHTML = `
+      <table class="backups-table">
+        <thead><tr>
+          <th>${t('backups_site') || 'Sitio'}</th>
+          <th>${t('backups_date') || 'Fecha'}</th>
+          <th>${t('backups_size') || 'Tamaño'}</th>
+          <th>${t('backups_actions') || 'Acciones'}</th>
+        </tr></thead>
+        <tbody id="backups-tbody"></tbody>
+      </table>`
+
+    const tbody = document.getElementById('backups-tbody')
+    backups.forEach(b => {
+      const tr = document.createElement('tr')
+      tr.innerHTML = `
+        <td><strong>${b.site}</strong></td>
+        <td>${fmtDate(b.createdAt)}</td>
+        <td>${fmtBytes(b.size)}</td>
+        <td class="backups-actions">
+          <button onclick="downloadBackup('${b.filename}')" title="${t('backups_download') || 'Descargar'}">⬇ ${t('backups_download') || 'Descargar'}</button>
+          <button onclick="restoreBackup('${b.filename}', '${b.site}', this)" title="${t('backups_restore') || 'Restaurar'}">↩ ${t('backups_restore') || 'Restaurar'}</button>
+          <button class="danger" onclick="deleteBackup('${b.filename}', this)" title="${t('backups_delete') || 'Eliminar'}">✕</button>
+        </td>`
+      tbody.appendChild(tr)
+    })
+  } catch (err) {
+    list.innerHTML = `<p style="color:var(--danger)">${err.message}</p>`
+  }
+}
+
+async function createSiteBackup(siteName, btn) {
+  if (btn) { btn.disabled = true; btn.classList.add('is-loading') }
+  try {
+    const res = await fetch(`/api/backups/${encodeURIComponent(siteName)}`, { method: 'POST' })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Backup failed')
+    alert(`✓ Backup creado: ${data.filename} (${fmtBytes(data.size)})${data.dbIncluded ? '\nDB incluida.' : '\nDB no incluida (no detectada).'}`)
+  } catch (err) {
+    alert('✗ ' + err.message)
+  } finally {
+    if (btn) { btn.disabled = false; btn.classList.remove('is-loading') }
+  }
+}
+
+function downloadBackup(filename) {
+  window.open(`/api/backups/download/${encodeURIComponent(filename)}`, '_blank')
+}
+
+async function restoreBackup(filename, site, btn) {
+  if (!confirm(`¿Restaurar backup de "${site}"?\nEsto sobreescribirá los archivos y la base de datos actuales del sitio.`)) return
+  if (btn) { btn.disabled = true; btn.classList.add('is-loading') }
+  try {
+    const res = await fetch(`/api/backups/restore/${encodeURIComponent(filename)}`, { method: 'POST' })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Restore failed')
+    alert(`✓ Restaurado: ${site}${data.dbRestored ? '\nDB restaurada.' : '\nDB no restaurada.'}`)
+  } catch (err) {
+    alert('✗ ' + err.message)
+  } finally {
+    if (btn) { btn.disabled = false; btn.classList.remove('is-loading') }
+  }
+}
+
+async function deleteBackup(filename, btn) {
+  if (!confirm(`¿Eliminar backup "${filename}"?`)) return
+  if (btn) { btn.disabled = true }
+  try {
+    const res = await fetch(`/api/backups/${encodeURIComponent(filename)}`, { method: 'DELETE' })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Delete failed')
+    loadBackups()
+  } catch (err) {
+    alert('✗ ' + err.message)
+    if (btn) btn.disabled = false
+  }
 }

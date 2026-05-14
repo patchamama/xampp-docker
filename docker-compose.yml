@@ -25,7 +25,7 @@ services:
 
   mariadb:
     container_name: xampp-mariadb
-    image: mariadb:10.4
+    image: mariadb:11.4
     environment:
       MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
     ports:
@@ -34,10 +34,11 @@ services:
       - ${MYSQL_DATA_PATH:-~/xampp-data/mysql}:/var/lib/mysql
       - ${CONFIG_PATH:-~/xampp-data/config}/mysql/my.cnf:/etc/mysql/conf.d/custom.cnf
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-u", "root", "--silent"]
+      test: ["CMD", "mariadb-admin", "ping", "-u", "root", "--silent"]
       interval: 5s
-      timeout: 5s
-      retries: 12
+      timeout: 10s
+      retries: 20
+      start_period: 30s
     networks:
       - xampp-net
     restart: unless-stopped
@@ -85,6 +86,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - ${CONFIG_PATH:-~/xampp-data/config}:/app/config
       - ${HTDOCS_PATH:-~/xampp-data/htdocs}:/htdocs
+      - ${BACKUPS_PATH:-~/xampp-data/backups}:/backups
       - ./.env:/app/.env
     environment:
       PANEL_PORT: 8080
@@ -92,6 +94,7 @@ services:
       MYSQL_USER: root
       MYSQL_PASSWORD: ""
       HTDOCS_PATH: /htdocs
+      BACKUPS_PATH: /backups
     depends_on:
       - php-apache
       - mariadb

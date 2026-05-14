@@ -65,6 +65,9 @@
     <a href="#" class="nav-link" data-section="languages">
       <span class="icon">🔬</span><span class="nav-label" data-i18n="nav_languages">Lenguajes</span>
     </a>
+    <a href="#" class="nav-link" data-section="backups">
+      <span class="icon">🗂️</span><span class="nav-label" data-i18n="nav_backups">Backups</span>
+    </a>
     <a href="#" class="nav-link" data-section="logs">
       <span class="icon">📋</span><span class="nav-label" data-i18n="nav_logs">Logs</span>
     </a>
@@ -313,6 +316,18 @@
   </section>
 
   <!-- Logs -->
+  <!-- Backups -->
+  <section id="section-backups" class="section">
+    <h2 data-i18n="backups_title">Backups</h2>
+    <div class="backups-bar">
+      <select id="backups-filter">
+        <option value="" data-i18n="backups_all">Todos los sitios</option>
+      </select>
+      <button class="primary" onclick="loadBackups()" data-i18n="backups_refresh">Actualizar</button>
+    </div>
+    <div id="backups-list"></div>
+  </section>
+
   <section id="section-logs" class="section">
     <h2 data-i18n="logs_title">Logs en Vivo</h2>
     <div class="logs-bar">
