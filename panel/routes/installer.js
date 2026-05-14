@@ -36,23 +36,10 @@ async function getLatestVersion(cms) {
       return { version: versions[0].version, url: versions[0].url }
     }
     case 'drupal': {
-      // Use GitHub releases API and fallback to tag tarball URL when assets are absent.
-      const data = await fetchJSON('https://api.github.com/repos/drupal/drupal/releases/latest')
-      const assets = Array.isArray(data?.assets) ? data.assets : []
-      const asset = assets.find(a =>
-        a?.name?.endsWith('.tar.gz') ||
-        a?.name?.endsWith('.zip')
-      )
-      if (asset?.browser_download_url) {
-        return { version: data.tag_name, url: asset.browser_download_url }
-      }
-
-      const tag = String(data?.tag_name || '').replace(/^v/i, '')
-      if (!tag) throw new Error('Could not resolve latest Drupal release')
-      return {
-        version: tag,
-        url: `https://github.com/drupal/drupal/archive/refs/tags/${tag}.tar.gz`
-      }
+      const xml = await fetchText('https://updates.drupal.org/release-history/drupal/current')
+      const m = xml.match(/<version>(\d+\.\d+\.\d+)<\/version>[\s\S]*?<download_link>(https:\/\/[^<]+\.tar\.gz)<\/download_link>/)
+      if (!m) throw new Error('Could not resolve latest Drupal release')
+      return { version: m[1], url: m[2] }
     }
   }
 }
