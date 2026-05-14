@@ -2,8 +2,11 @@ const express = require('express')
 const fs = require('fs')
 const path = require('path')
 const { execSync } = require('child_process')
+const Docker = require('dockerode')
 
 const router = express.Router()
+const docker = new Docker({ socketPath: '/var/run/docker.sock' })
+const PHP_CONTAINER = process.env.PHP_CONTAINER || 'xampp-php'
 const HTDOCS = process.env.HTDOCS_PATH || '/htdocs'
 const MYSQL_HOST = process.env.MYSQL_HOST || 'mariadb'
 
@@ -57,7 +60,8 @@ function readSiteMeta(siteDir) {
 
 function extractDbNameFromFile(filePath, patterns = []) {
   try {
-    const txt = fs.readFileSync(filePath, 'utf8')
+    // Strip commented lines so commented-out defines don't shadow active ones
+    const txt = fs.readFileSync(filePath, 'utf8').split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n')
     for (const rx of patterns) {
       const m = txt.match(rx)
       if (m?.[1]) return m[1].trim()
@@ -107,19 +111,57 @@ function writeSiteMeta(siteDir, meta) {
   fs.writeFileSync(path.join(siteDir, META_FILE), JSON.stringify(meta, null, 2), 'utf8')
 }
 
-function getWpDynamicInfo(siteDir) {
-  // Run each WP-CLI command independently so one failure doesn't wipe all results.
-  // shell:true allows 2>/dev/null to suppress PHP deprecation notices from subprocesses.
-  const run = (cmd) => {
-    try { return execSync(cmd, { encoding: 'utf8', shell: true }).trim() } catch { return '' }
-  }
-  // Valid slugs only — filters out any leaked PHP notice lines
+async function execInPhpContainer(cmd) {
+  try {
+    const container = docker.getContainer(PHP_CONTAINER)
+    const execObj = await container.exec({ Cmd: ['bash', '-c', cmd], AttachStdout: true, AttachStderr: false })
+    const stream = await execObj.start({ hijack: true, stdin: false })
+    let out = ''
+    await new Promise((resolve) => {
+      container.modem.demuxStream(stream, { write: c => { out += c.toString('utf8') } }, { write: () => {} })
+      stream.on('end', resolve)
+      stream.on('error', resolve)
+    })
+    return out.trim()
+  } catch { return '' }
+}
+
+function parseWpSerialized(raw) {
+  // Extract values from PHP serialized array: a:N:{i:0;s:NN:"value";...}
+  const matches = [...raw.matchAll(/s:\d+:"([^"]+)"/g)]
+  return matches.map(m => m[1])
+}
+
+async function getWpDynamicInfo(siteDir, dbName) {
+  const wpPath = siteDir.replace(/^\/htdocs/, '/var/www/html')
   const slugLines = (raw) => raw.split('\n').filter(l => /^[a-z0-9][a-z0-9._-]*$/.test(l.trim()))
 
+  // Detect table prefix from wp-config.php
+  let prefix = 'wp_'
+  try {
+    const cfg = fs.readFileSync(path.join(siteDir, 'wp-config.php'), 'utf8')
+    const m = cfg.match(/\$table_prefix\s*=\s*['"]([^'"]+)['"]/i)
+    if (m) prefix = m[1]
+  } catch {}
+
+  const db = dbName || 'wordpress'
+  const sqlOpts = `-h ${MYSQL_HOST} -u root ${db} -sN --ssl=0`
+
+  const runLocal = (cmd) => { try { return execSync(cmd, { encoding: 'utf8' }).trim() } catch { return '' } }
+
+  const [activePluginsRaw, themeRaw, usersRaw] = await Promise.all([
+    Promise.resolve(runLocal(`mysql ${sqlOpts} -e "SELECT option_value FROM ${prefix}options WHERE option_name='active_plugins';"`)),
+    Promise.resolve(runLocal(`mysql ${sqlOpts} -e "SELECT option_value FROM ${prefix}options WHERE option_name='stylesheet';"`)),
+    execInPhpContainer(`wp user list --path=${wpPath} --field=user_login --allow-root 2>/dev/null`),
+  ])
+
+  const pluginPaths = parseWpSerialized(activePluginsRaw)
+  const activePlugins = pluginPaths.map(p => p.split('/')[0]).filter(n => /^[a-z0-9][a-z0-9._-]*$/.test(n))
+
   return {
-    currentTheme: slugLines(run(`wp theme list --path=${siteDir} --status=active --field=name --allow-root 2>/dev/null`))[0] || null,
-    activePlugins: slugLines(run(`wp plugin list --path=${siteDir} --status=active --field=name --allow-root 2>/dev/null`)),
-    users: slugLines(run(`wp user list --path=${siteDir} --field=user_login --allow-root 2>/dev/null`)),
+    currentTheme: themeRaw.trim() || null,
+    activePlugins,
+    users: slugLines(usersRaw),
   }
 }
 
@@ -166,14 +208,14 @@ router.get('/', (req, res) => {
   }
 })
 
-router.get('/:site/info', (req, res) => {
+router.get('/:site/info', async (req, res) => {
   try {
     const siteDir = safeSitePath(req.params.site)
     if (!siteDir || !fs.existsSync(siteDir)) return res.status(404).json({ error: 'Site not found' })
     const cms = detectCMS(siteDir) || 'PHP'
     const meta = readSiteMeta(siteDir) || {}
     const dbName = detectDbName(siteDir, cms, req.params.site, meta)
-    const dynamic = cms === 'WordPress' ? getWpDynamicInfo(siteDir) : {}
+    const dynamic = cms === 'WordPress' ? await getWpDynamicInfo(siteDir, dbName) : {}
 
     const frontendFallback = `http://localhost/${req.params.site}`
     const adminFallback = (() => {
