@@ -149,21 +149,25 @@ async function loadSites() {
     for (const s of sites) {
       const card = document.createElement('div')
       card.className = 'site-card'
-
-      // Always prefer CMS icon in Sites list (as requested)
-      const iconHtml = `<span class="site-favicon-fallback">${CMS_SVG[s.cms] || s.icon}</span>`
+      const cmsIcon = CMS_SVG[s.cms] || `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16z"/></svg>`
+      const siteUrl = s.url || `http://localhost/${s.name}`
 
       card.innerHTML = `
-        ${iconHtml}
-        <div class="site-info">
-          <a class="site-name" href="${s.url}" target="_blank">${s.name}</a>
-          <div class="site-cms">${s.cms}</div>
+        <div class="site-card-header">
+          <div class="site-cms-badge">${cmsIcon}</div>
+          <div class="site-header-info">
+            <a class="site-name" href="${siteUrl}" target="_blank">${s.name}</a>
+            <div class="site-cms-label">${s.cms || 'Unknown'}</div>
+          </div>
+        </div>
+        <div class="site-card-body">
+          <div class="site-url">${siteUrl}</div>
           <div class="site-actions site-actions-inline">
-            <button class="site-icon-btn" title="${t('sites_info') || 'Info'}" aria-label="${t('sites_info') || 'Info'}" onclick="showSiteInfo('${s.name}', this)">${actionIcon('info')}</button>
-            <button class="site-icon-btn" title="${t('browser_title') || 'Archivos'}" aria-label="${t('browser_title') || 'Archivos'}" onclick="browseDir('/${s.name}')">${actionIcon('files')}</button>
-            <button class="site-icon-btn" title="${t('sites_admin') || 'Admin'}" aria-label="${t('sites_admin') || 'Admin'}" onclick="window.open('${s.adminUrl}','_blank')">${actionIcon('admin')}</button>
-            <button class="site-icon-btn" title="${t('sites_db') || 'Database'}" aria-label="${t('sites_db') || 'Database'}" onclick="window.open('${s.phpmyadminUrl}','_blank')">${actionIcon('db')}</button>
-            <button class="site-icon-btn danger" title="${t('sites_delete') || 'Eliminar'}" aria-label="${t('sites_delete') || 'Eliminar'}" onclick="deleteSite('${s.name}', this)">${actionIcon('delete')}</button>
+            <button class="site-icon-btn" title="${t('sites_info') || 'Info'}" onclick="showSiteInfo('${s.name}', this)">${actionIcon('info')} Info</button>
+            <button class="site-icon-btn" title="${t('browser_title') || 'Archivos'}" onclick="browseDir('/${s.name}')">${actionIcon('files')} Files</button>
+            <button class="site-icon-btn" title="${t('sites_admin') || 'Admin'}" onclick="window.open('${s.adminUrl}','_blank')">${actionIcon('admin')} Admin</button>
+            <button class="site-icon-btn" title="${t('sites_db') || 'Database'}" onclick="window.open('${s.phpmyadminUrl}','_blank')">${actionIcon('db')} DB</button>
+            <button class="site-icon-btn danger" title="${t('sites_delete') || 'Eliminar'}" onclick="deleteSite('${s.name}', this)">${actionIcon('delete')}</button>
           </div>
         </div>
       `
