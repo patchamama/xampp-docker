@@ -512,19 +512,26 @@ rebuild_from_scratch() {
     sudo chown "$USER" "$buildx_current"
   fi
 
-  # Pull base images explicitly first so BuildKit credential helper issues
-  # don't abort the entire build. BuildKit's metadata fetch with --pull can
-  # fail even when `docker pull` works fine (known Docker Desktop bug).
-  # Derive the list dynamically from Dockerfiles so it stays in sync.
+  # Pull base images explicitly so BuildKit credential helper issues don't
+  # abort the build. compose config resolves all env vars (e.g. $PHP_BASE_IMAGE)
+  # correctly — parsing .env directly leaves them empty.
+  local resolved_php_img
+  resolved_php_img=$(compose_cmd config 2>/dev/null | awk '/PHP_BASE_IMAGE:/{print $2}')
+
   local base_images=()
-  while IFS= read -r line; do
-    img="${line#FROM }"
-    # Expand $PHP_BASE_IMAGE from env if present
-    if [[ "$img" == *'${'* || "$img" == *'$'* ]]; then
-      img=$(eval echo "$img" 2>/dev/null || true)
-    fi
-    [[ -n "$img" && "$img" != *" "* ]] && base_images+=("$img")
-  done < <(grep -h '^FROM' "$script_dir"/Dockerfile* "$script_dir"/panel/Dockerfile 2>/dev/null | awk '{print $2}' | sort -u | grep -v '^$')
+  while IFS= read -r img; do
+    [[ -n "$img" ]] && base_images+=("$img")
+  done < <(
+    # FROM lines in Dockerfiles, substituting resolved PHP image
+    grep -h '^FROM' "$script_dir"/Dockerfile* "$script_dir"/panel/Dockerfile 2>/dev/null \
+      | awk '{print $2}' \
+      | while read -r img; do
+          [[ "$img" == *'PHP_BASE_IMAGE'* || "$img" == '${PHP_BASE_IMAGE}' || "$img" == '$PHP_BASE_IMAGE' ]] \
+            && img="$resolved_php_img"
+          [[ -n "$img" && "$img" != *'$'* ]] && echo "$img"
+        done \
+      | sort -u
+  )
 
   for img in "${base_images[@]}"; do
     echo -e "  Pulling ${img}..."
